@@ -1,0 +1,44 @@
+node_modules
+dist
+build
+.next
+.turbo
+coverage
+*.log
+*.tsbuildinfo
+.DS_Store
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+
+# Map provider secrets. Mapbox download tokens belong in ~/.gradle/gradle.properties
+# and ~/.netrc, never in the repo.
+.netrc
+.mapbox
+mapbox.token
+secrets.properties
+apps/mobile/android/local.properties
+
+# Generated Prisma clients
+apps/*/src/generated
+
+# User-uploaded media
+apps/*/uploads
+
+# iOS
+apps/mobile/ios/build
+apps/mobile/ios/Pods
+apps/mobile/ios/*.xcworkspace/xcuserdata
+apps/mobile/ios/*.xcodeproj/xcuserdata
+*.xcuserstate
+
+# Android
+apps/mobile/android/.gradle
+apps/mobile/android/build
+apps/mobile/android/app/build
+apps/mobile/android/app/.cxx
+apps/mobile/android/.kotlin

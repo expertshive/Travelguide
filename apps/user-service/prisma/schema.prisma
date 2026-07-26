@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model ServiceRecord {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("service_records")
+}
+
+/// Profile data owned by user-service. `userId` is the auth-service user id (JWT `sub`).
+model UserProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  displayName String?  @map("display_name")
+  bio         String?  @db.Text
+  location    String?
+  website     String?
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  photos      ProfilePhoto[]
+  socialLinks SocialLink[]
+
+  @@map("user_profiles")
+}
+
+model ProfilePhoto {
+  id        String   @id @default(uuid())
+  profileId String   @map("profile_id")
+  url       String
+  caption   String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("profile_photos")
+}
+
+model SocialLink {
+  id        String   @id @default(uuid())
+  profileId String   @map("profile_id")
+  platform  String
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  profile UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, platform])
+  @@index([profileId])
+  @@map("social_links")
+}

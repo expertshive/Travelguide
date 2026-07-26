@@ -1,0 +1,31 @@
+{
+  "color-primary-100": "#F0EDFF",
+  "color-primary-200": "#E1DBFF",
+  "color-primary-300": "#C5B9FE",
+  "color-primary-400": "#9B87FD",
+  "color-primary-500": "#7551FF",
+  "color-primary-600": "#5A34E8",
+  "color-primary-700": "#422AFB",
+  "color-primary-800": "#3311DB",
+  "color-primary-900": "#11047A",
+  "color-primary-transparent-100": "rgba(117, 81, 255, 0.08)",
+  "color-primary-transparent-200": "rgba(117, 81, 255, 0.16)",
+  "color-primary-transparent-300": "rgba(117, 81, 255, 0.24)",
+  "color-primary-transparent-400": "rgba(117, 81, 255, 0.32)",
+  "color-primary-transparent-500": "rgba(117, 81, 255, 0.4)",
+  "color-primary-transparent-600": "rgba(117, 81, 255, 0.48)",
+
+  "color-success-500": "#00C48C",
+  "color-info-500": "#3965FF",
+  "color-warning-500": "#FFB020",
+  "color-danger-500": "#FF3B5C",
+
+  "text-basic-color": "#2B3674",
+  "text-hint-color": "#8F9BBA",
+  "background-basic-color-1": "#FFFFFF",
+  "background-basic-color-2": "#F4F7FE",
+  "background-basic-color-3": "#E9EDF7",
+  "background-basic-color-4": "#E1E9F8",
+  "border-basic-color-3": "#E9EDF7",
+  "border-basic-color-4": "#E1E9F8"
+}

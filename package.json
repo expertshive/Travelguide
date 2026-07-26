@@ -1,0 +1,29 @@
+{
+  "name": "traveler-guide",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "dev:infra": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "dev:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "dev:all": "bash scripts/start-all.sh",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@traveler-guide/eslint-config": "workspace:*",
+    "@traveler-guide/tsconfig": "workspace:*",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}

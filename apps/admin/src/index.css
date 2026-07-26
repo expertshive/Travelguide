@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+/* Horizon UI design tokens: brand purple, navy text, soft blue-grey surfaces. */
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-brand-50: #e9e3ff;
+  --color-brand-100: #e9e3ff;
+  --color-brand-200: #c0b8fe;
+  --color-brand-300: #a195fd;
+  --color-brand-400: #7551ff;
+  --color-brand-500: #422afb;
+  --color-brand-600: #3311db;
+  --color-brand-700: #2b3674;
+  --color-brand-800: #190793;
+  --color-brand-900: #11047a;
+
+  --color-navy-50: #d0dcfb;
+  --color-navy-100: #aac0fe;
+  --color-navy-200: #a3b9f8;
+  --color-navy-300: #728fea;
+  --color-navy-400: #3652ba;
+  --color-navy-500: #1b3bbb;
+  --color-navy-600: #24388a;
+  --color-navy-700: #1b254b;
+  --color-navy-800: #111c44;
+  --color-navy-900: #0b1437;
+
+  --color-gray-50: #f4f7fe;
+  --color-gray-100: #e9edf7;
+  --color-gray-200: #e1e9f8;
+  --color-gray-300: #f4f7fe;
+  --color-gray-400: #e9edf7;
+  --color-gray-500: #8f9bba;
+  --color-gray-600: #a3aed0;
+  --color-gray-700: #707eae;
+  --color-gray-800: #707eae;
+  --color-gray-900: #1b2559;
+
+  --shadow-card: 14px 17px 40px 4px rgba(112, 144, 176, 0.18);
+  --shadow-soft: 0px 18px 40px rgba(112, 144, 176, 0.12);
+  --shadow-brand: 0px 12px 24px rgba(66, 42, 251, 0.28);
+
+  --radius-card: 20px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-gray-50);
+    color: var(--color-brand-700);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}

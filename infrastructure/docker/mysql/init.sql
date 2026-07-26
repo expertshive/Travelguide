@@ -1,0 +1,26 @@
+CREATE DATABASE IF NOT EXISTS traveler_auth CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_user CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_trip CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_place CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_navigation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_social CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_chat CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_notification CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_media CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_payment CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_business CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+GRANT ALL PRIVILEGES ON traveler_auth.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_user.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_trip.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_place.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_navigation.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_social.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_chat.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_notification.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_media.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_ai.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_payment.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_business.* TO 'traveler'@'%';
+FLUSH PRIVILEGES;
