@@ -1,21 +1,61 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { createLogger } from '@traveler-guide/logger';
+import { randomUUID } from 'node:crypto';
 import { NextFunction, Request, Response } from 'express';
+import { SERVICE_ROUTES } from './service-routes';
 
-const SERVICE_ROUTES = [
-  { segment: 'auth', envKey: 'AUTH_SERVICE_URL' },
-  { segment: 'users', envKey: 'USER_SERVICE_URL' },
-  { segment: 'trips', envKey: 'TRIP_SERVICE_URL' },
-  { segment: 'places', envKey: 'PLACE_SERVICE_URL' },
-  { segment: 'navigation', envKey: 'NAVIGATION_SERVICE_URL' },
-  { segment: 'social', envKey: 'SOCIAL_SERVICE_URL' },
-  { segment: 'chat', envKey: 'CHAT_SERVICE_URL' },
-  { segment: 'notifications', envKey: 'NOTIFICATION_SERVICE_URL' },
-  { segment: 'media', envKey: 'MEDIA_SERVICE_URL' },
-  { segment: 'ai', envKey: 'AI_SERVICE_URL' },
-  { segment: 'payments', envKey: 'PAYMENT_SERVICE_URL' },
-  { segment: 'business', envKey: 'BUSINESS_SERVICE_URL' },
+/**
+ * Paths reachable without a token. Everything else is rejected here rather
+ * than being forwarded, so a downstream service is never asked to decide
+ * whether an anonymous caller is allowed in.
+ */
+const PUBLIC_PATHS = new Set([
+  '/v1/auth/register/send-otp',
+  '/v1/auth/register/verify-otp',
+  '/v1/auth/login',
+  '/v1/auth/refresh',
+  '/v1/auth/forgot-password',
+  '/v1/auth/reset-password',
+]);
+
+/**
+ * Identity headers are minted here from a verified token. Any copy arriving
+ * from the client is discarded first — otherwise a caller could simply set
+ * `x-user-id` and impersonate somebody.
+ */
+const IDENTITY_HEADERS = [
+  'x-user-id',
+  'x-user-email',
+  'x-user-roles',
+  'x-user-permissions',
 ] as const;
+
+const CORRELATION_HEADER = 'x-correlation-id';
+
+/**
+ * Administrative surfaces — the generic table editors each service exposes at
+ * `/v1/<segment>/admin/...`. Every service also guards these itself, but gating
+ * them here means a new service cannot accidentally publish its database by
+ * forgetting to.
+ */
+const ADMIN_PATH = /^\/v1\/[^/]+\/admin(\/|$)/;
+const ADMIN_PERMISSION = 'admin:access';
+
+/**
+ * Service-to-service routes. These are reached directly over the internal
+ * network with a shared token, and some of them return credentials in clear
+ * text, so the gateway refuses to relay them from the outside world at all.
+ */
+const INTERNAL_PATH = /^\/v1\/[^/]+\/internal(\/|$)/;
+
+type AccessTokenPayload = {
+  sub: string;
+  email?: string;
+  roles?: string[];
+  permissions?: string[];
+};
 
 function readRawBody(req: Request): Promise<Buffer> {
   if (req.readableEnded) {
@@ -32,7 +72,12 @@ function readRawBody(req: Request): Promise<Buffer> {
 
 @Injectable()
 export class ProxyMiddleware implements NestMiddleware {
-  constructor(private readonly config: ConfigService) {}
+  private readonly logger = createLogger('ProxyMiddleware');
+
+  constructor(
+    private readonly config: ConfigService,
+    private readonly jwt: JwtService,
+  ) {}
 
   use(req: Request, res: Response, next: NextFunction) {
     const pathname = req.originalUrl.split('?')[0] ?? '';
@@ -48,10 +93,79 @@ export class ProxyMiddleware implements NestMiddleware {
       return;
     }
 
-    void this.forward(route.envKey, req, res);
+    const correlationId = this.correlationId(req);
+    res.setHeader(CORRELATION_HEADER, correlationId);
+
+    if (INTERNAL_PATH.test(pathname)) {
+      this.logger.warn('Blocked an external request to an internal path', {
+        correlationId,
+        pathname,
+      });
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Not found' },
+      });
+      return;
+    }
+
+    // Never trust identity headers supplied by the caller.
+    for (const header of IDENTITY_HEADERS) delete req.headers[header];
+
+    let user: AccessTokenPayload | null = null;
+    if (!PUBLIC_PATHS.has(pathname)) {
+      user = this.verify(req);
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Missing or invalid access token' },
+        });
+        return;
+      }
+
+      if (ADMIN_PATH.test(pathname) && !(user.permissions ?? []).includes(ADMIN_PERMISSION)) {
+        this.logger.warn('Rejected non-admin request to an admin path', {
+          correlationId,
+          pathname,
+          userId: user.sub,
+        });
+        res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: `Requires the ${ADMIN_PERMISSION} permission` },
+        });
+        return;
+      }
+    }
+
+    void this.forward(route.envKey, req, res, user, correlationId);
   }
 
-  private async forward(envKey: string, req: Request, res: Response) {
+  private correlationId(req: Request): string {
+    const existing = req.headers[CORRELATION_HEADER];
+    const value = Array.isArray(existing) ? existing[0] : existing;
+    return value && value.trim() ? value : randomUUID();
+  }
+
+  private verify(req: Request): AccessTokenPayload | null {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return null;
+
+    try {
+      return this.jwt.verify<AccessTokenPayload>(header.slice(7), {
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      });
+    } catch {
+      // Covers expired, tampered, and wrongly signed tokens alike.
+      return null;
+    }
+  }
+
+  private async forward(
+    envKey: string,
+    req: Request,
+    res: Response,
+    user: AccessTokenPayload | null,
+    correlationId: string,
+  ) {
     const baseUrl = this.config.get<string>(envKey)?.replace(/\/$/, '');
     if (!baseUrl) {
       res.status(502).json({ success: false, error: { message: `${envKey} not configured` } });
@@ -69,6 +183,14 @@ export class ProxyMiddleware implements NestMiddleware {
       } else {
         headers.set(key, value);
       }
+    }
+
+    headers.set(CORRELATION_HEADER, correlationId);
+    if (user) {
+      headers.set('x-user-id', user.sub);
+      if (user.email) headers.set('x-user-email', user.email);
+      headers.set('x-user-roles', (user.roles ?? []).join(','));
+      headers.set('x-user-permissions', (user.permissions ?? []).join(','));
     }
 
     const init: RequestInit = {
@@ -110,9 +232,14 @@ export class ProxyMiddleware implements NestMiddleware {
       const body = Buffer.from(await upstream.arrayBuffer());
       res.send(body);
     } catch (error) {
+      this.logger.error('Upstream request failed', {
+        correlationId,
+        target: envKey,
+        message: error instanceof Error ? error.message : String(error),
+      });
       res.status(502).json({
         success: false,
-        error: { message: 'Upstream request failed', detail: String(error) },
+        error: { code: 'UPSTREAM_UNAVAILABLE', message: 'Upstream request failed' },
       });
     }
   }

@@ -1,155 +1,469 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import {
-  Button,
-  Card,
-  Divider,
-  Layout,
-  Text,
-  TopNavigation,
-  TopNavigationAction,
-} from '@ui-kitten/components';
-import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE } from '../lib/auth';
-import type { AppStackParamList } from '../navigation/types';
-import { accessory, LogoutIcon, PersonIcon } from '../ui/icons';
+import {
+  listRecentSearches,
+  listSavedPlaces,
+  type RecentSearch,
+  type SavedPlace,
+} from '../lib/map';
+import { getMyProfile, resolveMediaUrl } from '../lib/profile';
+import type { TabScreenProps } from '../navigation/types';
+import {
+  Avatar,
+  Card,
+  Gradient,
+  Icon,
+  IconButton,
+  Txt,
+  colors,
+  radius,
+  shadow,
+  spacing,
+} from '../ui';
 
-type Props = NativeStackScreenProps<AppStackParamList, 'Home'>;
+type Props = TabScreenProps<'Home'>;
+type IconType = (p: { color?: string; size?: number }) => React.ReactElement;
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+const CATEGORIES = [
+  { label: 'Restaurants', query: 'restaurant', grad: 'sunset' as const, icon: Icon.CompassIcon },
+  { label: 'Hotels', query: 'hotel', grad: 'ocean' as const, icon: Icon.BookmarkIcon },
+  { label: 'Coffee', query: 'coffee', grad: 'brand' as const, icon: Icon.StarIcon },
+  { label: 'Fuel', query: 'gas station', grad: 'night' as const, icon: Icon.CarIcon },
+];
+
+const PLACE_ICON: Record<string, IconType> = {
+  HOME: Icon.HomeIcon,
+  WORK: Icon.WorkIcon,
+  CUSTOM: Icon.MapPinIcon,
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+export function HomeScreen({ navigation }: Props) {
+  const { user } = useAuth();
+  const [saved, setSaved] = useState<SavedPlace[]>([]);
+  const [recent, setRecent] = useState<RecentSearch[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      Promise.all([
+        listSavedPlaces().catch(() => [] as SavedPlace[]),
+        listRecentSearches().catch(() => [] as RecentSearch[]),
+      ]).then(([s, r]) => {
+        if (!active) return;
+        setSaved(s);
+        setRecent(r);
+      });
+      getMyProfile()
+        .then((p) => active && setAvatarUrl(resolveMediaUrl(p.avatarUrl)))
+        .catch(() => {});
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  const firstName = (user?.name ?? '').split(' ')[0] || 'Traveler';
+  const hasHome = saved.some((s) => s.label === 'HOME');
+
   return (
-    <View style={styles.row}>
-      <Text category="c1" appearance="hint" style={styles.rowLabel}>
-        {label.toUpperCase()}
-      </Text>
-      <Text category="s1">{children}</Text>
+    <View style={styles.root}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Gradient name="brand" style={styles.header}>
+          {/* Decorative blobs for depth */}
+          <View style={styles.blobOne} pointerEvents="none" />
+          <View style={styles.blobTwo} pointerEvents="none" />
+
+          <View style={styles.headerTop}>
+            <View style={{ flex: 1 }}>
+              <Txt variant="small" color="rgba(255,255,255,0.8)">
+                {greeting()},
+              </Txt>
+              <Txt variant="h2" color={colors.onPrimary} style={{ marginTop: 2 }}>
+                {firstName}
+              </Txt>
+            </View>
+            <IconButton bg="rgba(255,255,255,0.16)" onPress={() => {}}>
+              <Icon.BellIcon color={colors.onPrimary} size={20} />
+            </IconButton>
+            <Pressable
+              onPress={() => navigation.navigate('Profile')}
+              style={{ marginLeft: spacing.sm }}
+            >
+              <Avatar uri={avatarUrl} name={user?.name ?? user?.email} size={44} />
+            </Pressable>
+          </View>
+
+          <Pressable style={styles.search} onPress={() => navigation.navigate('Map', {})}>
+            <Icon.SearchIcon color={colors.textDim} size={20} />
+            <Txt variant="body" color={colors.textDim} style={{ flex: 1 }}>
+              Where do you want to go?
+            </Txt>
+            <Gradient name="candy" angle="diagonal" style={styles.searchBtn}>
+              <Icon.NavigationIcon color={colors.onPrimary} size={18} />
+            </Gradient>
+          </Pressable>
+        </Gradient>
+
+        {/* Featured card */}
+        <Pressable
+          style={styles.featuredWrap}
+          onPress={() => navigation.navigate('Map', { query: 'attractions' })}
+        >
+          <Gradient name="candy" style={styles.featured}>
+            <View style={styles.featBlob} pointerEvents="none" />
+            <View style={{ flex: 1 }}>
+              <Txt variant="caption" color="rgba(255,255,255,0.85)">
+                FEATURED
+              </Txt>
+              <Txt variant="h3" color={colors.onPrimary} style={{ marginTop: 4 }}>
+                Discover top attractions
+              </Txt>
+              <Txt variant="small" color="rgba(255,255,255,0.9)" style={{ marginTop: 2 }}>
+                Hand-picked spots near you
+              </Txt>
+              <View style={styles.featCta}>
+                <Txt variant="caption" color={colors.onPrimary}>
+                  EXPLORE
+                </Txt>
+                <Icon.ChevronRightIcon color={colors.onPrimary} size={14} />
+              </View>
+            </View>
+            <View style={styles.featIcon}>
+              <Icon.CompassIcon color={colors.onPrimary} size={30} />
+            </View>
+          </Gradient>
+        </Pressable>
+
+        <View style={styles.section}>
+          <Txt variant="h3" style={styles.sectionTitle}>
+            Explore nearby
+          </Txt>
+          <View style={styles.catGrid}>
+            {CATEGORIES.map((c) => {
+              const CatIcon = c.icon;
+              return (
+                <Pressable
+                  key={c.label}
+                  style={styles.catItem}
+                  onPress={() => navigation.navigate('Map', { query: c.query })}
+                >
+                  <Gradient name={c.grad} style={styles.catIcon}>
+                    <CatIcon color={colors.onPrimary} size={24} />
+                  </Gradient>
+                  <Txt variant="small" center numberOfLines={1} style={styles.catLabel}>
+                    {c.label}
+                  </Txt>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Txt variant="h3">Saved places</Txt>
+            <Pressable onPress={() => navigation.navigate('Saved')}>
+              <Txt variant="small" color={colors.primary}>
+                See all
+              </Txt>
+            </Pressable>
+          </View>
+
+          {saved.length ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.savedRow}
+            >
+              {saved.map((place) => {
+                const PIcon = PLACE_ICON[place.label] ?? Icon.MapPinIcon;
+                return (
+                  <Pressable
+                    key={place.id}
+                    style={styles.savedCard}
+                    onPress={() =>
+                      navigation.navigate('PlaceDetail', {
+                        place: {
+                          id: place.id,
+                          name: place.name,
+                          address: place.address,
+                          latitude: place.latitude,
+                          longitude: place.longitude,
+                        },
+                      })
+                    }
+                  >
+                    <View style={styles.savedIcon}>
+                      <PIcon color={colors.primary} size={20} />
+                    </View>
+                    <Txt variant="bodyStrong" numberOfLines={1} style={{ marginTop: spacing.sm }}>
+                      {place.label === 'CUSTOM'
+                        ? place.name
+                        : place.label === 'HOME'
+                          ? 'Home'
+                          : 'Work'}
+                    </Txt>
+                    <Txt variant="small" color={colors.textDim} numberOfLines={1}>
+                      {place.address}
+                    </Txt>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <Card style={styles.emptyCard} elevation="soft">
+              <View style={styles.savedIcon}>
+                <Icon.BookmarkIcon color={colors.primary} size={20} />
+              </View>
+              <Txt variant="bodyStrong" style={{ marginTop: spacing.sm }}>
+                No saved places yet
+              </Txt>
+              <Txt variant="small" color={colors.textDim} style={{ marginTop: 2 }}>
+                Search a place and save it as Home, Work, or a favourite.
+              </Txt>
+              <Pressable style={styles.emptyCta} onPress={() => navigation.navigate('Map', {})}>
+                <Icon.PlusIcon color={colors.primary} size={18} />
+                <Txt variant="small" color={colors.primary}>
+                  Add a place
+                </Txt>
+              </Pressable>
+            </Card>
+          )}
+        </View>
+
+        {recent.length ? (
+          <View style={styles.section}>
+            <Txt variant="h3" style={styles.sectionTitle}>
+              Recent
+            </Txt>
+            <Card padded={false} elevation="soft">
+              {recent.slice(0, 6).map((r, i) => (
+                <Pressable
+                  key={r.id}
+                  style={[styles.recentRow, i > 0 && styles.recentBorderTop]}
+                  onPress={() =>
+                    navigation.navigate('PlaceDetail', {
+                      place: {
+                        name: r.name,
+                        address: r.address,
+                        latitude: r.latitude,
+                        longitude: r.longitude,
+                      },
+                    })
+                  }
+                >
+                  <View style={styles.recentIcon}>
+                    <Icon.ClockIcon color={colors.textDim} size={18} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyStrong" numberOfLines={1}>
+                      {r.name}
+                    </Txt>
+                    <Txt variant="small" color={colors.textDim} numberOfLines={1}>
+                      {r.address}
+                    </Txt>
+                  </View>
+                  <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
+                </Pressable>
+              ))}
+            </Card>
+          </View>
+        ) : null}
+
+        <View style={[styles.section, { marginTop: spacing.lg }]}>
+          <Card elevation="soft" style={styles.tipRow}>
+            <View style={styles.tipIcon}>
+              <Icon.NavigationIcon color={colors.teal} size={20} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodyStrong">Routes start from your Home</Txt>
+              <Txt variant="small" color={colors.textDim}>
+                {hasHome
+                  ? 'Tap any place to preview the drive.'
+                  : 'Save a Home place to plan smarter routes.'}
+              </Txt>
+            </View>
+          </Card>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
-export function HomeScreen({ navigation }: Props) {
-  const { user, logout } = useAuth();
-
-  if (!user) return null;
-
-  const initial = (user.name || user.email).charAt(0).toUpperCase();
-
-  return (
-    <Layout style={styles.root} level="2">
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <TopNavigation
-          alignment="center"
-          title="Traveler Guide"
-          accessoryRight={() => (
-            <TopNavigationAction
-              icon={accessory(LogoutIcon, { size: 22 })}
-              onPress={() => void logout()}
-            />
-          )}
-        />
-        <Divider />
-
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Card style={styles.hero} disabled>
-            <View style={styles.heroRow}>
-              <View style={styles.avatarFallback}>
-                <Text category="h5" status="control">
-                  {initial}
-                </Text>
-              </View>
-              <View style={styles.heroText}>
-                <Text category="h6">{user.name}</Text>
-                <Text appearance="hint" category="p2">
-                  {user.email}
-                </Text>
-              </View>
-            </View>
-
-            <Button
-              style={styles.heroButton}
-              accessoryLeft={accessory(PersonIcon, { size: 20, color: '#fff' })}
-              onPress={() => navigation.navigate('Profile')}
-            >
-              My profile
-            </Button>
-          </Card>
-
-          <Card style={styles.card} disabled>
-            <Text category="s1" style={styles.cardTitle}>
-              Account
-            </Text>
-            <Row label="Roles">{user.roles.length ? user.roles.join(', ') : 'None'}</Row>
-            <Row label="Permissions">
-              {user.permissions.length ? user.permissions.join(', ') : 'None'}
-            </Row>
-            <Row label="API">{API_BASE}</Row>
-          </Card>
-
-          <Button
-            appearance="outline"
-            status="basic"
-            style={styles.signOut}
-            onPress={() => void logout()}
-          >
-            Sign out
-          </Button>
-        </ScrollView>
-      </SafeAreaView>
-    </Layout>
-  );
-}
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingBottom: 120 },
+
+  header: {
+    paddingTop: spacing.xxxl + spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
+    borderBottomLeftRadius: radius.xl + 6,
+    borderBottomRightRadius: radius.xl + 6,
+    overflow: 'hidden',
   },
-  scroll: {
-    padding: 20,
-    paddingBottom: 40,
+  blobOne: {
+    position: 'absolute',
+    top: -60,
+    right: -40,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  hero: {
-    borderRadius: 20,
-    borderWidth: 0,
-    marginBottom: 16,
+  blobTwo: {
+    position: 'absolute',
+    bottom: -50,
+    left: -30,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  heroRow: {
+  headerTop: { flexDirection: 'row', alignItems: 'center' },
+  search: {
+    marginTop: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.sm,
+    ...shadow.soft,
   },
-  avatarFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#7551FF',
+  searchBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroText: {
-    marginLeft: 14,
-    flex: 1,
+
+  featuredWrap: { marginHorizontal: spacing.xl, marginTop: spacing.xl },
+  featured: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    ...shadow.lifted,
   },
-  heroButton: {
-    marginTop: 18,
-    borderRadius: 14,
+  featBlob: {
+    position: 'absolute',
+    top: -30,
+    right: -20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  card: {
-    borderRadius: 20,
-    borderWidth: 0,
-    marginBottom: 16,
+  featCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.md,
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
-  cardTitle: {
-    marginBottom: 6,
+  featIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  row: {
-    marginTop: 12,
+
+  section: { paddingHorizontal: spacing.xl, marginTop: spacing.xxl },
+  sectionTitle: { marginBottom: spacing.md },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
-  rowLabel: {
-    letterSpacing: 0.6,
-    marginBottom: 2,
+
+  catGrid: { flexDirection: 'row', gap: spacing.md },
+  catItem: { flex: 1, alignItems: 'center' },
+  catIcon: {
+    width: '100%',
+    maxWidth: 70,
+    aspectRatio: 1,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.soft,
   },
-  signOut: {
-    borderRadius: 14,
+  catLabel: { marginTop: 8, width: '100%' },
+
+  savedRow: { gap: spacing.md, paddingRight: spacing.xl },
+  savedCard: {
+    width: 160,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    ...shadow.soft,
+  },
+  savedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyCard: { alignItems: 'flex-start' },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+  },
+
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  recentBorderTop: { borderTopWidth: 1, borderTopColor: colors.border },
+  recentIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  tipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  tipIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.tealSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

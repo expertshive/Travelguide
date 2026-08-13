@@ -1,0 +1,5306 @@
+{
+  "info": {
+    "name": "Traveler Guide API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "# Traveler Guide API\n\nGenerated from the services' own OpenAPI documents by\n`scripts/generate-postman.py`, covering **144 operations** across\n**14 services**. Re-run that script after changing a route so this\ncollection cannot drift from the code.\n\n## Getting started\n\n1. Start the stack: `pnpm dev:all`\n2. Select the **Traveler Guide \u2014 Local** environment.\n3. Run **02 \u00b7 Auth \u00b7 Public \u2192 Login (admin)**. It stores `accessToken` and\n   `refreshToken` automatically; every other request inherits them.\n\n## How requests reach a service\n\nEverything goes through the gateway on `{{baseUrl}}` (`http://localhost:4000`).\nThe gateway routes on the first path element after `/v1` \u2014 `/v1/map/...` goes to\nmap-service, `/v1/auth/...` to auth-service \u2014 and forwards the path unchanged,\nso the path you see here is the path the service sees.\n\nThe gateway also:\n\n- **rejects anonymous requests** to anything outside its small public list\n  (registration, login, refresh, forgot/reset password, health);\n- **requires the `admin:access` permission** for every `/v1/*/admin/**` path;\n- **returns 404 for every `/v1/*/internal/**` path**, so service-to-service\n  endpoints can never be reached from outside;\n- **strips client-supplied identity headers** and re-mints `x-user-id`,\n  `x-user-email`, `x-user-roles` and `x-user-permissions` from the verified\n  token, so a caller cannot impersonate anyone by setting a header;\n- attaches an `x-correlation-id` to every request for tracing.\n\n## Accounts\n\n| Account | Credentials | Use for |\n| --- | --- | --- |\n| Administrator | `admin@travelerguide.com` / `Admin@123456` | Users, Roles, Integrations, Database Admin |\n| Traveler | `traveler@guide.test` / `Traveler@123` | Profile, Map, Assistant |\n\n## Response shape\n\nEvery endpoint answers with the same envelope:\n\n```json\n{ \"success\": true, \"data\": { } }\n```\n\nand on failure:\n\n```json\n{ \"success\": false, \"error\": { \"code\": \"UNAUTHORIZED\", \"message\": \"\u2026\" } }\n```\n\n## What is implemented\n\nauth-service, user-service, map-service and ai-service carry real domain logic.\nThe other nine services are scaffolds: they expose health plus the generic table\neditor, and their database holds a single placeholder `ServiceRecord` model.\n"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Warn early instead of letting every request fail with a bare 401.",
+          "const needsToken = !pm.request.url.toString().includes('/auth/login')",
+          "  && !pm.request.url.toString().includes('/health');",
+          "if (needsToken && !pm.collectionVariables.get('accessToken')) {",
+          "  console.warn('No accessToken set \u2014 run \"02 \u00b7 Auth \u00b7 Public > Login\" first.');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string",
+      "description": "API gateway \u2014 the only entry point clients should use."
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "Filled in automatically by the Login requests."
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string",
+      "description": "Filled in automatically by the Login requests."
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@travelerguide.com",
+      "type": "string",
+      "description": "Seeded super_admin account."
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin@123456",
+      "type": "string",
+      "description": "Seeded super_admin password."
+    },
+    {
+      "key": "travelerEmail",
+      "value": "traveler@guide.test",
+      "type": "string",
+      "description": "Normal traveler account."
+    },
+    {
+      "key": "travelerPassword",
+      "value": "Traveler@123",
+      "type": "string",
+      "description": "Normal traveler password."
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string",
+      "description": "A user id, for the user-scoped requests."
+    },
+    {
+      "key": "resourceId",
+      "value": "",
+      "type": "string",
+      "description": "Generic :id path parameter (user id, role id \u2026)."
+    },
+    {
+      "key": "roleName",
+      "value": "traveler",
+      "type": "string",
+      "description": "Role name, for removing a role from a user."
+    },
+    {
+      "key": "photoId",
+      "value": "",
+      "type": "string",
+      "description": "Gallery photo id."
+    },
+    {
+      "key": "platform",
+      "value": "instagram",
+      "type": "string",
+      "description": "Social platform key."
+    },
+    {
+      "key": "provider",
+      "value": "google_maps",
+      "type": "string",
+      "description": "Integration provider key."
+    },
+    {
+      "key": "rowId",
+      "value": "",
+      "type": "string",
+      "description": "Primary key of a row, for the table editor."
+    },
+    {
+      "key": "resetToken",
+      "value": "",
+      "type": "string",
+      "description": "Password reset token from the forgot-password response."
+    },
+    {
+      "key": "otp",
+      "value": "0000",
+      "type": "string",
+      "description": "Registration OTP (returned in the response in development)."
+    },
+    {
+      "key": "internalToken",
+      "value": "",
+      "type": "string",
+      "description": "INTERNAL_SERVICE_TOKEN, for the internal folder."
+    },
+    {
+      "key": "authUrl",
+      "value": "http://localhost:4001",
+      "type": "string",
+      "description": "Auth service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "usersUrl",
+      "value": "http://localhost:4002",
+      "type": "string",
+      "description": "Users service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "tripsUrl",
+      "value": "http://localhost:4003",
+      "type": "string",
+      "description": "Trips service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "placesUrl",
+      "value": "http://localhost:4004",
+      "type": "string",
+      "description": "Places service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "navigationUrl",
+      "value": "http://localhost:4005",
+      "type": "string",
+      "description": "Navigation service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "socialUrl",
+      "value": "http://localhost:4006",
+      "type": "string",
+      "description": "Social service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "chatUrl",
+      "value": "http://localhost:4007",
+      "type": "string",
+      "description": "Chat service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "notificationsUrl",
+      "value": "http://localhost:4008",
+      "type": "string",
+      "description": "Notifications service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "mediaUrl",
+      "value": "http://localhost:4009",
+      "type": "string",
+      "description": "Media service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "aiUrl",
+      "value": "http://localhost:4010",
+      "type": "string",
+      "description": "AI service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "paymentsUrl",
+      "value": "http://localhost:4011",
+      "type": "string",
+      "description": "Payments service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "businessUrl",
+      "value": "http://localhost:4012",
+      "type": "string",
+      "description": "Business service, direct (bypasses the gateway)."
+    },
+    {
+      "key": "mapUrl",
+      "value": "http://localhost:4013",
+      "type": "string",
+      "description": "Map service, direct (bypasses the gateway)."
+    }
+  ],
+  "item": [
+    {
+      "name": "01 \u00b7 Health & Discovery",
+      "item": [
+        {
+          "name": "Gateway health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Service health check\n\n`GET /v1/health`\n\n**Auth:** none \u2014 reachable without a token.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct service health",
+          "description": "Each service on its own port, bypassing the gateway.",
+          "item": [
+            {
+              "name": "Auth (auth-service:4001)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{authUrl}}/v1/health",
+                  "host": [
+                    "{{authUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **auth-service**, bypassing the gateway on port 4001.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Users (user-service:4002)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{usersUrl}}/v1/health",
+                  "host": [
+                    "{{usersUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **user-service**, bypassing the gateway on port 4002.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Trips (trip-service:4003)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{tripsUrl}}/v1/health",
+                  "host": [
+                    "{{tripsUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **trip-service**, bypassing the gateway on port 4003.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Places (place-service:4004)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{placesUrl}}/v1/health",
+                  "host": [
+                    "{{placesUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **place-service**, bypassing the gateway on port 4004.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Navigation (navigation-service:4005)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{navigationUrl}}/v1/health",
+                  "host": [
+                    "{{navigationUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **navigation-service**, bypassing the gateway on port 4005.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Social (social-service:4006)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{socialUrl}}/v1/health",
+                  "host": [
+                    "{{socialUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **social-service**, bypassing the gateway on port 4006.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Chat (chat-service:4007)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{chatUrl}}/v1/health",
+                  "host": [
+                    "{{chatUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **chat-service**, bypassing the gateway on port 4007.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Notifications (notification-service:4008)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{notificationsUrl}}/v1/health",
+                  "host": [
+                    "{{notificationsUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **notification-service**, bypassing the gateway on port 4008.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Media (media-service:4009)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{mediaUrl}}/v1/health",
+                  "host": [
+                    "{{mediaUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **media-service**, bypassing the gateway on port 4009.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "AI (ai-service:4010)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{aiUrl}}/v1/health",
+                  "host": [
+                    "{{aiUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **ai-service**, bypassing the gateway on port 4010.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Payments (payment-service:4011)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{paymentsUrl}}/v1/health",
+                  "host": [
+                    "{{paymentsUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **payment-service**, bypassing the gateway on port 4011.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Business (business-service:4012)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{businessUrl}}/v1/health",
+                  "host": [
+                    "{{businessUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **business-service**, bypassing the gateway on port 4012.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Map (map-service:4013)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{mapUrl}}/v1/health",
+                  "host": [
+                    "{{mapUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "health"
+                  ]
+                },
+                "description": "Liveness check for **map-service**, bypassing the gateway on port 4013.\n\nUse this to tell a failed service apart from a failed gateway.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Every service with its manageable tables, for the admin sidebar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/admin/services",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "services"
+              ]
+            },
+            "description": "Every service with its manageable tables, for the admin sidebar\n\n`GET /v1/admin/services`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+          },
+          "response": []
+        }
+      ],
+      "description": "Liveness checks and service discovery.\n\n`GET /v1/health` on the gateway reports only the gateway. The **Direct service health** requests bypass the gateway and hit each service on its own port, which is how you tell a dead service apart from a dead gateway.\n\n`GET /v1/admin/services` is what the admin portal calls to build its sidebar: it returns every service with its tables and an `online` flag."
+    },
+    {
+      "name": "02 \u00b7 Auth \u00b7 Public",
+      "item": [
+        {
+          "name": "Login (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Sign in as the seeded platform administrator and store the tokens.\n\n`GET /v1/auth/login` returns `{ accessToken, refreshToken, tokenType }`; the test script writes the first two into collection variables, so every admin request in this collection works immediately afterwards.\n\n**Run this first** for anything under Users, Roles, Integrations or Database Admin \u2014 those need the `admin:access` permission.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the tokens so every other request in this collection can use them.",
+                  "const body = pm.response.json();",
+                  "const data = body && body.data;",
+                  "",
+                  "pm.test('login succeeded', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "  pm.expect(data && data.accessToken, 'accessToken in response').to.be.a('string');",
+                  "});",
+                  "",
+                  "if (data && data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', data.refreshToken || '');",
+                  "  console.log('Saved accessToken (' + data.accessToken.length + ' chars)');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (traveler)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Sign in as a normal traveler account and store the tokens.\n\nUse this for the traveler-facing endpoints (profile, map, assistant). It does **not** grant `admin:access`, so admin folders will answer 403.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{travelerEmail}}\",\n  \"password\": \"{{travelerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the tokens so every other request in this collection can use them.",
+                  "const body = pm.response.json();",
+                  "const data = body && body.data;",
+                  "",
+                  "pm.test('login succeeded', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "  pm.expect(data && data.accessToken, 'accessToken in response').to.be.a('string');",
+                  "});",
+                  "",
+                  "if (data && data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', data.refreshToken || '');",
+                  "  console.log('Saved accessToken (' + data.accessToken.length + ' chars)');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request a password reset email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Request a password reset email\n\n`POST /v1/auth/forgot-password`\n\n**Auth:** none \u2014 reachable without a token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{travelerEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh access token using a refresh token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Refresh access token using a refresh token\n\n`POST /v1/auth/refresh`\n\n**Auth:** none \u2014 reachable without a token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the tokens so every other request in this collection can use them.",
+                  "const body = pm.response.json();",
+                  "const data = body && body.data;",
+                  "",
+                  "pm.test('login succeeded', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "  pm.expect(data && data.accessToken, 'accessToken in response').to.be.a('string');",
+                  "});",
+                  "",
+                  "if (data && data.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', data.refreshToken || '');",
+                  "  console.log('Saved accessToken (' + data.accessToken.length + ' chars)');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send OTP for registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/register/send-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "register",
+                "send-otp"
+              ]
+            },
+            "description": "Send OTP for registration\n\n`POST /v1/auth/register/send-otp`\n\n**Auth:** none \u2014 reachable without a token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{travelerEmail}}\",\n  \"name\": \"John Doe\",\n  \"mobile\": \"+966501234567\",\n  \"password\": \"{{travelerPassword}}\",\n  \"confirmPassword\": \"<confirmPassword>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP and complete registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/register/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "register",
+                "verify-otp"
+              ]
+            },
+            "description": "Verify OTP and complete registration\n\n`POST /v1/auth/register/verify-otp`\n\n**Auth:** none \u2014 reachable without a token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{travelerEmail}}\",\n  \"otp\": \"0000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset password using a valid reset token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Reset password using a valid reset token\n\n`POST /v1/auth/reset-password`\n\n**Auth:** none \u2014 reachable without a token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"password\": \"{{travelerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "The only endpoints reachable without a token \u2014 the gateway keeps this exact list and rejects everything else before forwarding.\n\n**Start here.** `Login (admin)` and `Login (traveler)` both save `accessToken` and `refreshToken` into collection variables automatically, so every other request in this collection works afterwards without copying a token by hand."
+    },
+    {
+      "name": "03 \u00b7 Auth \u00b7 Session",
+      "item": [
+        {
+          "name": "Logout and revoke refresh tokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Logout and revoke refresh tokens\n\n`POST /v1/auth/logout`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get current authenticated user profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Get current authenticated user profile\n\n`GET /v1/auth/me`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints for the signed-in session. Requires a bearer token."
+    },
+    {
+      "name": "04 \u00b7 Users (admin)",
+      "item": [
+        {
+          "name": "List all users (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/users?",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all users (admin)\n\n`GET /v1/auth/users`\n\n**Auth:** bearer token (inherited from the collection).\n\n**Query parameters**\n- `page` (optional)\n- `pageSize` (optional)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get user by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Get user by ID\n\n`GET /v1/auth/users/{id}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update user (activate/deactivate)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Update user (activate/deactivate)\n\n`PATCH /v1/auth/users/{id}`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign role to user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/users/:id/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "users",
+                ":id",
+                "roles"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Assign role to user\n\n`POST /v1/auth/users/{id}/roles`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleName\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove role from user",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/users/:id/roles/:roleName",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "users",
+                ":id",
+                "roles",
+                ":roleName"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                },
+                {
+                  "key": "roleName",
+                  "value": "{{roleName}}"
+                }
+              ]
+            },
+            "description": "Remove role from user\n\n`DELETE /v1/auth/users/{id}/roles/{roleName}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        }
+      ],
+      "description": "User administration. Requires the `admin:access` permission \u2014 sign in with the admin account first, or the gateway answers 403."
+    },
+    {
+      "name": "05 \u00b7 Roles & Permissions (admin)",
+      "item": [
+        {
+          "name": "List all roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles"
+              ]
+            },
+            "description": "List all roles\n\n`GET /v1/auth/roles`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create a new role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles"
+              ]
+            },
+            "description": "Create a new role\n\n`POST /v1/auth/roles`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"guide\",\n  \"description\": \"<description>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List all permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles/permissions/list",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles",
+                "permissions",
+                "list"
+              ]
+            },
+            "description": "List all permissions\n\n`GET /v1/auth/roles/permissions/list`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get role by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Get role by ID\n\n`GET /v1/auth/roles/{id}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update role metadata",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Update role metadata\n\n`PATCH /v1/auth/roles/{id}`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"<description>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a role",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Delete a role\n\n`DELETE /v1/auth/roles/{id}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Replace role permissions",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/roles/:id/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "roles",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "Replace role permissions\n\n`PUT /v1/auth/roles/{id}/permissions`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"user:read\",\n    \"trip:read\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Role and permission management (RBAC). Requires `admin:access`.\n\nThe `super_admin` role is protected and cannot be deleted."
+    },
+    {
+      "name": "06 \u00b7 Integrations (admin)",
+      "item": [
+        {
+          "name": "Every integration with its configuration status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/admin/integrations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "admin",
+                "integrations"
+              ]
+            },
+            "description": "Every integration with its configuration status\n\n`GET /v1/auth/admin/integrations`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+          },
+          "response": []
+        },
+        {
+          "name": "One integration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/admin/integrations/:provider",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "admin",
+                "integrations",
+                ":provider"
+              ],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            },
+            "description": "One integration\n\n`GET /v1/auth/admin/integrations/{provider}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Set or clear credential fields",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/admin/integrations/:provider",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "admin",
+                "integrations",
+                ":provider"
+              ],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            },
+            "description": "Set or clear credential fields\n\n`PUT /v1/auth/admin/integrations/{provider}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"GOOGLE_MAPS_API_KEY\": \"AIzaSy\\u2026replace-me\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Enable or disable an integration",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/admin/integrations/:provider",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "admin",
+                "integrations",
+                ":provider"
+              ],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            },
+            "description": "Enable or disable an integration\n\n`PATCH /v1/auth/admin/integrations/{provider}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove stored credentials, reverting to environment variables",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/admin/integrations/:provider",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "admin",
+                "integrations",
+                ":provider"
+              ],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            },
+            "description": "Remove stored credentials, reverting to environment variables\n\n`DELETE /v1/auth/admin/integrations/{provider}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Make a live call to the provider and report the result",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/admin/integrations/:provider/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "admin",
+                "integrations",
+                ":provider",
+                "test"
+              ],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            },
+            "description": "Make a live call to the provider and report the result\n\n`POST /v1/auth/admin/integrations/{provider}/test`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+          },
+          "response": []
+        }
+      ],
+      "description": "Third-party credential registry. Requires `admin:access`.\n\nSecrets are stored encrypted (AES-256-GCM) and are never returned in clear text \u2014 responses contain masked previews only. Saving a credential takes effect in the consuming service within ~30 seconds without a restart. Sending an empty string for a field clears it and falls back to the environment variable.\n\n`POST .../test` runs a live call against the provider and reports whether the credentials actually work."
+    },
+    {
+      "name": "07 \u00b7 User Profiles",
+      "item": [
+        {
+          "name": "Get the current user profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile"
+              ]
+            },
+            "description": "Get the current user profile\n\n`GET /v1/users/profile`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update bio and profile details",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile"
+              ]
+            },
+            "description": "Update bio and profile details\n\n`PATCH /v1/users/profile`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Huzaifa\",\n  \"bio\": \"Traveler and photographer based in Riyadh.\",\n  \"location\": \"Riyadh, Saudi Arabia\",\n  \"website\": \"https://example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload a profile picture",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/avatar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "avatar"
+              ]
+            },
+            "description": "Upload a profile picture\n\n`POST /v1/users/profile/avatar`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove the profile picture",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/avatar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "avatar"
+              ]
+            },
+            "description": "Remove the profile picture\n\n`DELETE /v1/users/profile/avatar`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Add a photo to the profile gallery",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/photos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "photos"
+              ]
+            },
+            "description": "Add a photo to the profile gallery\n\n`POST /v1/users/profile/photos`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file"
+                },
+                {
+                  "key": "caption",
+                  "value": "Sunset in AlUla",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update a gallery photo caption",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/photos/:photoId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "photos",
+                ":photoId"
+              ],
+              "variable": [
+                {
+                  "key": "photoId",
+                  "value": "{{photoId}}"
+                }
+              ]
+            },
+            "description": "Update a gallery photo caption\n\n`PATCH /v1/users/profile/photos/{photoId}`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Sunset in AlUla\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete a gallery photo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/photos/:photoId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "photos",
+                ":photoId"
+              ],
+              "variable": [
+                {
+                  "key": "photoId",
+                  "value": "{{photoId}}"
+                }
+              ]
+            },
+            "description": "Delete a gallery photo\n\n`DELETE /v1/users/profile/photos/{photoId}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Add or update a linked social account",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/social-links",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "social-links"
+              ]
+            },
+            "description": "Add or update a linked social account\n\n`PUT /v1/users/profile/social-links`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"platform\": \"instagram\",\n  \"url\": \"https://instagram.com/username\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unlink a social account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/social-links/:platform",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "social-links",
+                ":platform"
+              ],
+              "variable": [
+                {
+                  "key": "platform",
+                  "value": "{{platform}}"
+                }
+              ]
+            },
+            "description": "Unlink a social account\n\n`DELETE /v1/users/profile/social-links/{platform}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "List supported social platforms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/profile/social-platforms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "profile",
+                "social-platforms"
+              ]
+            },
+            "description": "List supported social platforms\n\n`GET /v1/users/profile/social-platforms`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get another user profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/:userId/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                ":userId",
+                "profile"
+              ],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "description": "Get another user profile\n\n`GET /v1/users/{userId}/profile`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        }
+      ],
+      "description": "Traveler profile, avatar, gallery photos and social links. Any authenticated user may call these for their own profile.\n\nAvatar and photo uploads are `multipart/form-data` with a file field named `file` \u2014 select a local image in the request body tab before sending."
+    },
+    {
+      "name": "08 \u00b7 Map \u00b7 Geocoding",
+      "item": [
+        {
+          "name": "Map style and public token for the client renderer",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "config"
+              ]
+            },
+            "description": "Map style and public token for the client renderer\n\n`GET /v1/map/geocode/config`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET map/geocode/places",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/places",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "places"
+              ]
+            },
+            "description": "\n`GET /v1/map/geocode/places`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Save Home, Work, or a custom place",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/places",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "places"
+              ]
+            },
+            "description": "Save Home, Work, or a custom place\n\n`POST /v1/map/geocode/places`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"HOME\",\n  \"name\": \"<name>\",\n  \"address\": \"<address>\",\n  \"latitude\": 0,\n  \"longitude\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE map/geocode/places/{id}",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/places/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "places",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{resourceId}}"
+                }
+              ]
+            },
+            "description": "\n`DELETE /v1/map/geocode/places/{id}`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET map/geocode/recent",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/recent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "recent"
+              ]
+            },
+            "description": "\n`GET /v1/map/geocode/recent`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE map/geocode/recent",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/recent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "recent"
+              ]
+            },
+            "description": "\n`DELETE /v1/map/geocode/recent`\n\n**Auth:** bearer token (inherited from the collection)."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve coordinates to an address (drop a pin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/reverse?latitude=24.7136&longitude=46.6753",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "reverse"
+              ],
+              "query": [
+                {
+                  "key": "latitude",
+                  "value": "24.7136",
+                  "description": ""
+                },
+                {
+                  "key": "longitude",
+                  "value": "46.6753",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Resolve coordinates to an address (drop a pin)\n\n`GET /v1/map/geocode/reverse`\n\n**Auth:** bearer token (inherited from the collection).\n\n**Query parameters**\n- `latitude` (required)\n- `longitude` (required)"
+          },
+          "response": []
+        },
+        {
+          "name": "Address autocomplete and place search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/geocode/search?q=King Fahd Road",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "geocode",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "King Fahd Road",
+                  "description": ""
+                },
+                {
+                  "key": "latitude",
+                  "value": "",
+                  "description": "Bias results near this latitude",
+                  "disabled": true
+                },
+                {
+                  "key": "longitude",
+                  "value": "",
+                  "description": "Bias results near this longitude",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "8",
+                  "description": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Address autocomplete and place search\n\n`GET /v1/map/geocode/search`\n\n**Auth:** bearer token (inherited from the collection).\n\n**Query parameters**\n- `q` (required)\n- `latitude` (optional) \u2014 Bias results near this latitude\n- `longitude` (optional) \u2014 Bias results near this longitude\n- `limit` (optional)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Place search, reverse geocoding, saved places (Home/Work/Custom) and recent searches.\n\nResults are served by a provider chain (Mapbox or Google, then an offline fallback) and cached in Redis, so a repeated search may be answered without calling the provider."
+    },
+    {
+      "name": "09 \u00b7 Map \u00b7 Routes",
+      "item": [
+        {
+          "name": "Calculate a route plus alternative options",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/routes/alternatives",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "routes",
+                "alternatives"
+              ]
+            },
+            "description": "Calculate a route plus alternative options\n\n`POST /v1/map/routes/alternatives`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"destination\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"waypoints\": [\n    {\n      \"latitude\": 24.7136,\n      \"longitude\": 46.6753\n    }\n  ],\n  \"mode\": \"driving\",\n  \"preference\": \"fastest\",\n  \"avoid\": {\n    \"tolls\": false,\n    \"highways\": false,\n    \"unpaved\": false,\n    \"ferries\": false\n  },\n  \"alternatives\": false,\n  \"language\": \"en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Calculate a route between two points",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/routes/calculate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "routes",
+                "calculate"
+              ]
+            },
+            "description": "Calculate a route between two points\n\n`POST /v1/map/routes/calculate`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"destination\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"waypoints\": [\n    {\n      \"latitude\": 24.7136,\n      \"longitude\": 46.6753\n    }\n  ],\n  \"mode\": \"driving\",\n  \"preference\": \"fastest\",\n  \"avoid\": {\n    \"tolls\": false,\n    \"highways\": false,\n    \"unpaved\": false,\n    \"ferries\": false\n  },\n  \"alternatives\": false,\n  \"language\": \"en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Added time and distance from inserting a stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/routes/estimate-stop-impact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "routes",
+                "estimate-stop-impact"
+              ]
+            },
+            "description": "Added time and distance from inserting a stop\n\n`POST /v1/map/routes/estimate-stop-impact`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"destination\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"waypoints\": [\n    {\n      \"latitude\": 24.7136,\n      \"longitude\": 46.6753\n    }\n  ],\n  \"mode\": \"driving\",\n  \"preference\": \"fastest\",\n  \"avoid\": {\n    \"tolls\": false,\n    \"highways\": false,\n    \"unpaved\": false,\n    \"ferries\": false\n  },\n  \"alternatives\": false,\n  \"language\": \"en\",\n  \"candidateStop\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Recalculate after the traveller leaves the route",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/map/routes/reroute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "map",
+                "routes",
+                "reroute"
+              ]
+            },
+            "description": "Recalculate after the traveller leaves the route\n\n`POST /v1/map/routes/reroute`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"destination\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  },\n  \"waypoints\": [\n    {\n      \"latitude\": 24.7136,\n      \"longitude\": 46.6753\n    }\n  ],\n  \"mode\": \"driving\",\n  \"preference\": \"fastest\",\n  \"avoid\": {\n    \"tolls\": false,\n    \"highways\": false,\n    \"unpaved\": false,\n    \"ferries\": false\n  },\n  \"alternatives\": false,\n  \"language\": \"en\",\n  \"currentPosition\": {\n    \"latitude\": 24.7136,\n    \"longitude\": 46.6753\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Route calculation, alternatives, rerouting and stop-impact estimation.\n\nAll coordinates are decimal degrees. The examples use Riyadh (24.7136, 46.6753). `mode` accepts `driving`, `motorcycle`, `walking` or `cycling`."
+    },
+    {
+      "name": "10 \u00b7 AI Assistant",
+      "item": [
+        {
+          "name": "Conversational travel voice assistant (reply + one action)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ai/assistant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ai",
+                "assistant"
+              ]
+            },
+            "description": "Conversational travel voice assistant (reply + one action)\n\n`POST /v1/ai/assistant`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"What is the weather like at my destination?\",\n  \"context\": {\n    \"origin\": \"Riyadh\",\n    \"destination\": \"AlUla\",\n    \"mode\": \"driving\",\n    \"stops\": []\n  },\n  \"history\": [\n    {\n      \"role\": \"user\",\n      \"text\": \"Plan a trip to AlUla\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"text\": \"How many days do you have?\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Synthesize speech (ElevenLabs). Returns base64 audio or null.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/ai/tts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "ai",
+                "tts"
+              ]
+            },
+            "description": "Synthesize speech (ElevenLabs). Returns base64 audio or null.\n\n`POST /v1/ai/tts`\n\n**Auth:** bearer token (inherited from the collection).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Turn right in 300 meters.\",\n  \"gender\": \"female\",\n  \"voiceId\": \"<voiceId>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Conversational travel assistant (Google Gemini) and speech synthesis (ElevenLabs, with a device-voice fallback on the client).\n\nThese are declared public inside ai-service, but the gateway still requires a bearer token because they are not on its public path list."
+    },
+    {
+      "name": "11 \u00b7 Database Admin",
+      "item": [
+        {
+          "name": "Auth",
+          "description": "Tables owned by Auth.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/auth/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/auth/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/auth/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/auth/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/auth/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "role"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/auth/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/auth/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "role"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/auth/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"name\": \"demo_role\",\n    \"description\": \"Created from Postman\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/auth/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "role"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/auth/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"name\": \"demo_role\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/auth/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "role"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/auth/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "description": "Tables owned by Users.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/users/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/users/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/users/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/users/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/users/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/users/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Trips",
+          "description": "Tables owned by Trips.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/trips/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "trips",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/trips/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/trips/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "trips",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/trips/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/trips/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "trips",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/trips/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/trips/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "trips",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/trips/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/trips/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "trips",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/trips/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/trips/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "trips",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/trips/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Places",
+          "description": "Tables owned by Places.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/places/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "places",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/places/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/places/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "places",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/places/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/places/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "places",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/places/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/places/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "places",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/places/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/places/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "places",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/places/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/places/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "places",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/places/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Navigation",
+          "description": "Tables owned by Navigation.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/navigation/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "navigation",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/navigation/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/navigation/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "navigation",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/navigation/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/navigation/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "navigation",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/navigation/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/navigation/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "navigation",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/navigation/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/navigation/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "navigation",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/navigation/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/navigation/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "navigation",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/navigation/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Social",
+          "description": "Tables owned by Social.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/social/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "social",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/social/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/social/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "social",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/social/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/social/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "social",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/social/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/social/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "social",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/social/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/social/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "social",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/social/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/social/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "social",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/social/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Chat",
+          "description": "Tables owned by Chat.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/chat/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "chat",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/chat/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/chat/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "chat",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/chat/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/chat/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "chat",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/chat/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/chat/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "chat",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/chat/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/chat/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "chat",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/chat/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/chat/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "chat",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/chat/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Notifications",
+          "description": "Tables owned by Notifications.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/notifications/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "notifications",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/notifications/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/notifications/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "notifications",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/notifications/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/notifications/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "notifications",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/notifications/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/notifications/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "notifications",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/notifications/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/notifications/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "notifications",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/notifications/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/notifications/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "notifications",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/notifications/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Media",
+          "description": "Tables owned by Media.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/media/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "media",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/media/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/media/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "media",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/media/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/media/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "media",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/media/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/media/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "media",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/media/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/media/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "media",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/media/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/media/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "media",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/media/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "AI",
+          "description": "Tables owned by AI.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/ai/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ai",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/ai/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/ai/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ai",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/ai/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/ai/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ai",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/ai/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/ai/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ai",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/ai/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/ai/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ai",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/ai/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/ai/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ai",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/ai/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Payments",
+          "description": "Tables owned by Payments.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/payments/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/payments/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/payments/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/payments/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/payments/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/payments/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/payments/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/payments/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/payments/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/payments/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/payments/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/payments/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Business",
+          "description": "Tables owned by Business.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/business/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "business",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/business/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/business/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "business",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/business/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/business/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "business",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/business/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/business/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "business",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/business/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"key\": \"demo-key\",\n    \"value\": \"demo value\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/business/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "business",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/business/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"key\": \"demo-key\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/business/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "business",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "serviceRecord"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/business/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Map",
+          "description": "Tables owned by Map.",
+          "item": [
+            {
+              "name": "Describe this service so the admin can group its tables",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/map/admin/db/meta",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "map",
+                    "admin",
+                    "db",
+                    "meta"
+                  ]
+                },
+                "description": "Describe this service so the admin can group its tables\n\n`GET /v1/map/admin/db/meta`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "List every table with its column metadata",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/map/admin/db/tables",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "map",
+                    "admin",
+                    "db",
+                    "tables"
+                  ]
+                },
+                "description": "List every table with its column metadata\n\n`GET /v1/map/admin/db/tables`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403."
+              },
+              "response": []
+            },
+            {
+              "name": "Read a page of rows from a table",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/map/admin/db/tables/:model?page=&pageSize=&search=",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "map",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "savedPlace"
+                    }
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "",
+                      "description": ""
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": ""
+                    }
+                  ]
+                },
+                "description": "Read a page of rows from a table\n\n`GET /v1/map/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.\n\n**Query parameters**\n- `page` (required)\n- `pageSize` (required)\n- `search` (required)"
+              },
+              "response": []
+            },
+            {
+              "name": "Create a row",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/map/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "map",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "savedPlace"
+                    }
+                  ]
+                },
+                "description": "Create a row\n\n`POST /v1/map/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"data\": {\n    \"userId\": \"{{userId}}\",\n    \"label\": \"CUSTOM\",\n    \"name\": \"Kingdom Centre\",\n    \"address\": \"Al Olaya, Riyadh\",\n    \"latitude\": 24.7114,\n    \"longitude\": 46.6745\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update a row by its primary key",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/map/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "map",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "savedPlace"
+                    }
+                  ]
+                },
+                "description": "Update a row by its primary key\n\n`PATCH /v1/map/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  },\n  \"data\": {\n    \"userId\": \"{{userId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a row by its primary key",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/v1/map/admin/db/tables/:model",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "map",
+                    "admin",
+                    "db",
+                    "tables",
+                    ":model"
+                  ],
+                  "variable": [
+                    {
+                      "key": "model",
+                      "value": "savedPlace"
+                    }
+                  ]
+                },
+                "description": "Delete a row by its primary key\n\n`DELETE /v1/map/admin/db/tables/{model}`\n\n**Auth:** bearer token **plus the `admin:access` permission**. Sign in with the admin account or the gateway answers 403.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"where\": {\n    \"id\": \"{{rowId}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ],
+      "description": "Schema-driven table browser and editor, mounted by every service at `/v1/{segment}/admin/db`. Requires the `admin:access` permission.\n\nThe routes are generated from each service's Prisma schema, so the shape is identical everywhere and only the `:model` path parameter changes. Each subfolder below is pre-filled with a real model from that service.\n\nNotes:\n- Fields whose name looks sensitive (password, token, secret, otp, api key) are masked as `\u2022\u2022\u2022\u2022\u2022\u2022` and cannot be edited.\n- `PATCH` and `DELETE` identify the row by primary key in `where`.\n- auth-service refuses to delete your own user row or the `super_admin` role."
+    },
+    {
+      "name": "12 \u00b7 Internal (service-to-service)",
+      "item": [
+        {
+          "name": "Resolve integration credentials (internal)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-internal-token",
+                "value": "{{internalToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/v1/auth/internal/integrations/:provider",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "internal",
+                "integrations",
+                ":provider"
+              ],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "{{provider}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Returns a provider's credentials **in clear text** for other services to consume.\n\n`GET /v1/auth/internal/integrations/:provider`\n\n**Auth:** the `x-internal-token` shared secret (`INTERNAL_SERVICE_TOKEN`), not a JWT.\n\n**This is not reachable through the gateway** \u2014 it targets auth-service directly on `{{authUrl}}`, because the gateway returns 404 for any `/v1/*/internal/**` path so credentials can never be relayed to the outside world.\n\nThis is how map-service resolves its Mapbox and Google keys and how ai-service resolves Gemini and ElevenLabs, which is why a key saved in the admin portal takes effect without a restart."
+          },
+          "response": []
+        }
+      ],
+      "description": "Service-to-service endpoints. **The gateway deliberately returns 404 for these**, because they hand back credentials in clear text \u2014 they are reachable only on the internal network.\n\nThe request below therefore targets auth-service directly on `{{authUrl}}` and authenticates with the `x-internal-token` shared secret rather than a JWT. This is the mechanism other services use to resolve API keys at runtime.\n\nIt is excluded from Swagger on purpose, so it is written by hand here."
+    }
+  ]
+}

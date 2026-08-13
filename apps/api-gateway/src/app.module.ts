@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
+import { GatewayAdminModule } from './admin/admin.module';
 import { GatewayAuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
 import { ProxyModule } from './proxy/proxy.module';
@@ -13,6 +14,7 @@ import { WebsocketModule } from './websocket/websocket.module';
     TerminusModule,
     RabbitmqModule,
     GatewayAuthModule,
+    GatewayAdminModule,
     ProxyModule,
     WebsocketModule,
   ],

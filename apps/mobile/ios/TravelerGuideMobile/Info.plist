@@ -35,8 +35,16 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo for your Traveler Guide profile.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use your microphone to search places by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turn your speech into a place search.</string>
+	<key>GMSApiKey</key>
+	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Show your location on the map and guide you along your route.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Keep guiding you during active navigation, even in the background.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose photos for your Traveler Guide profile.</string>
 	<key>RCTNewArchEnabled</key>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RoleEntity, UserSummary } from '@traveler-guide/types';
 import { useAuth } from '../auth/AuthContext';
-import { Alert, Badge, Card, PageHeader, SmallButton, Spinner } from '../ui';
+import { Alert, Badge, Card, PageHeader, SmallButton, Spinner, cn } from '../ui';
+import { CloseIcon } from '../ui/icons';
 
 export default function UsersPage() {
   const { auth } = useAuth();
@@ -54,6 +55,15 @@ export default function UsersPage() {
     }
   }
 
+  async function removeRole(userId: string, roleName: string) {
+    try {
+      await auth.removeUserRole(userId, roleName);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove role');
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -87,7 +97,23 @@ export default function UsersPage() {
                   <td className="px-3 py-4">
                     <div className="flex flex-wrap gap-1.5">
                       {user.roles.length ? (
-                        user.roles.map((role) => <Badge key={role}>{role}</Badge>)
+                        user.roles.map((role) => (
+                          <span
+                            key={role}
+                            className="inline-flex items-center gap-1 rounded-full bg-brand-100 py-1 pl-3 pr-1.5 text-xs font-bold text-brand-600"
+                          >
+                            {role}
+                            <button
+                              type="button"
+                              aria-label={`Remove ${role} role`}
+                              title={`Remove ${role}`}
+                              className="grid size-4 place-items-center rounded-full text-brand-600 transition-colors hover:bg-red-100 hover:text-red-600"
+                              onClick={() => void removeRole(user.id, role)}
+                            >
+                              <CloseIcon className="size-3" />
+                            </button>
+                          </span>
+                        ))
                       ) : (
                         <span className="text-gray-600">—</span>
                       )}
@@ -110,20 +136,32 @@ export default function UsersPage() {
                       >
                         {user.isActive ? 'Deactivate' : 'Activate'}
                       </SmallButton>
-                      <select
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 outline-none"
-                        defaultValue=""
-                        onChange={(e) => void assignRole(user.id, e.target.value)}
-                      >
-                        <option value="" disabled>
-                          Assign role
-                        </option>
-                        {roles.map((role) => (
-                          <option key={role.id} value={role.name}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const available = roles.filter((role) => !user.roles.includes(role.name));
+                        return (
+                          <select
+                            className={cn(
+                              'rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 outline-none',
+                              'disabled:cursor-not-allowed disabled:opacity-60',
+                            )}
+                            value=""
+                            disabled={available.length === 0}
+                            onChange={(e) => {
+                              void assignRole(user.id, e.target.value);
+                              e.target.value = '';
+                            }}
+                          >
+                            <option value="" disabled>
+                              {available.length ? 'Assign role' : 'All roles assigned'}
+                            </option>
+                            {available.map((role) => (
+                              <option key={role.id} value={role.name}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>

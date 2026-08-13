@@ -112,3 +112,34 @@ model RegistrationOtp {
   @@index([mobile])
   @@map("registration_otps")
 }
+
+/// Credentials for third-party APIs, managed from the admin portal.
+/// One row per field, e.g. provider `gemini` + key `GEMINI_API_KEY`. Secret
+/// values are stored AES-256-GCM encrypted under SETTINGS_ENCRYPTION_KEY;
+/// `isSecret` is false for plain settings such as a model name.
+model IntegrationSetting {
+  id        String   @id @default(uuid())
+  provider  String
+  key       String
+  value     String   @db.Text
+  isSecret  Boolean  @default(true) @map("is_secret")
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, key])
+  @@index([provider])
+  @@map("integration_settings")
+}
+
+/// Provider-level state, kept apart from the credential rows so a keyless
+/// integration such as Open-Meteo can still be switched off, and so disabling a
+/// provider does not mean touching every one of its keys.
+model IntegrationProvider {
+  provider  String   @id
+  enabled   Boolean  @default(true)
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("integration_providers")
+}

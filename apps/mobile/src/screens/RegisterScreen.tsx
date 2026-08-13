@@ -1,13 +1,12 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Input, Spinner, Text } from '@ui-kitten/components';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import type { AuthStackParamList } from '../navigation/types';
+import type { AuthScreenProps } from '../navigation/types';
+import { Button, Field, Txt, colors, spacing } from '../ui';
 import { AuthLayout } from '../ui/AuthLayout';
 import { Banner } from '../ui/Banner';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
+type Props = AuthScreenProps<'Register'>;
 
 export function RegisterScreen({ navigation }: Props) {
   const { sendRegisterOtp, verifyRegisterOtp } = useAuth();
@@ -36,7 +35,6 @@ export function RegisterScreen({ navigation }: Props) {
       setError('Passwords do not match.');
       return;
     }
-
     setSubmitting(true);
     try {
       const result = await sendRegisterOtp({
@@ -61,7 +59,6 @@ export function RegisterScreen({ navigation }: Props) {
       setError('Enter the OTP code.');
       return;
     }
-
     setSubmitting(true);
     try {
       await verifyRegisterOtp(email.trim(), otp.trim());
@@ -71,8 +68,6 @@ export function RegisterScreen({ navigation }: Props) {
       setSubmitting(false);
     }
   }
-
-  const spinner = submitting ? () => <Spinner size="small" status="control" /> : undefined;
 
   return (
     <AuthLayout
@@ -87,16 +82,8 @@ export function RegisterScreen({ navigation }: Props) {
 
       {step === 'form' ? (
         <>
-          <Input
-            style={styles.field}
-            label="Full name"
-            placeholder="Jane Traveler"
-            autoComplete="name"
-            value={name}
-            onChangeText={setName}
-          />
-          <Input
-            style={styles.field}
+          <Field label="Full name" placeholder="Jane Traveler" autoComplete="name" value={name} onChangeText={setName} />
+          <Field
             label="Email"
             placeholder="you@example.com"
             autoCapitalize="none"
@@ -105,8 +92,7 @@ export function RegisterScreen({ navigation }: Props) {
             value={email}
             onChangeText={setEmail}
           />
-          <Input
-            style={styles.field}
+          <Field
             label="Mobile"
             placeholder="+966501234567"
             keyboardType="phone-pad"
@@ -114,8 +100,7 @@ export function RegisterScreen({ navigation }: Props) {
             value={mobile}
             onChangeText={setMobile}
           />
-          <Input
-            style={styles.field}
+          <Field
             label="Password"
             placeholder="Min. 8 characters"
             secureTextEntry
@@ -123,8 +108,7 @@ export function RegisterScreen({ navigation }: Props) {
             value={password}
             onChangeText={setPassword}
           />
-          <Input
-            style={styles.field}
+          <Field
             label="Confirm password"
             placeholder="Repeat your password"
             secureTextEntry
@@ -134,24 +118,21 @@ export function RegisterScreen({ navigation }: Props) {
           />
 
           <Button
-            style={styles.submit}
-            size="large"
-            disabled={submitting}
-            accessoryLeft={spinner}
+            title={submitting ? 'Sending…' : 'Send code'}
+            loading={submitting}
             onPress={() => void onSendOtp()}
-          >
-            {submitting ? 'Sending…' : 'Send code'}
-          </Button>
+          />
         </>
       ) : (
         <>
-          <Text appearance="hint" category="p2" style={styles.hint}>
-            Code sent to {email}
-            {otpHint ? ` · dev code ${otpHint}` : ''}
-          </Text>
+          <View style={styles.hint}>
+            <Txt variant="small" color={colors.textDim}>
+              Code sent to {email}
+              {otpHint ? ` · dev code ${otpHint}` : ''}
+            </Txt>
+          </View>
 
-          <Input
-            style={styles.field}
+          <Field
             label="Verification code"
             placeholder="0000"
             keyboardType="number-pad"
@@ -161,45 +142,37 @@ export function RegisterScreen({ navigation }: Props) {
           />
 
           <Button
-            style={styles.submit}
-            size="large"
-            disabled={submitting}
-            accessoryLeft={spinner}
+            title={submitting ? 'Verifying…' : 'Verify & create account'}
+            loading={submitting}
             onPress={() => void onVerifyOtp()}
-          >
-            {submitting ? 'Verifying…' : 'Verify & create account'}
-          </Button>
-
-          <Button appearance="ghost" size="small" onPress={() => setStep('form')}>
-            Back to details
-          </Button>
+          />
+          <Button
+            title="Back to details"
+            variant="ghost"
+            onPress={() => setStep('form')}
+            style={{ marginTop: spacing.sm }}
+          />
         </>
       )}
 
       <View style={styles.footer}>
-        <Text appearance="hint" category="p2">
-          Already registered?
-        </Text>
-        <Button appearance="ghost" size="small" onPress={() => navigation.navigate('Login')}>
-          Sign in
-        </Button>
+        <Txt variant="small" color={colors.textDim}>
+          Already registered?{' '}
+        </Txt>
+        <Pressable onPress={() => navigation.navigate('Login')} hitSlop={8}>
+          <Txt variant="small" color={colors.primary}>
+            Sign in
+          </Txt>
+        </Pressable>
       </View>
     </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  field: {
-    marginBottom: 14,
-  },
-  hint: {
-    marginBottom: 14,
-  },
-  submit: {
-    borderRadius: 14,
-  },
+  hint: { marginBottom: spacing.lg },
   footer: {
-    marginTop: 8,
+    marginTop: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

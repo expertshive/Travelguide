@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// A place the user pinned for reuse. `label` is HOME, WORK, or CUSTOM;
+/// a user may only hold one HOME and one WORK.
+model SavedPlace {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  label     String
+  name      String
+  address   String   @db.Text
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, label, name])
+  @@index([userId])
+  @@map("saved_places")
+}
+
+/// Search history backing the "recent searches" list. Trimmed per user.
+model RecentSearch {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  query      String
+  name       String
+  address    String   @db.Text
+  latitude   Float
+  longitude  Float
+  searchedAt DateTime @default(now()) @map("searched_at")
+
+  @@index([userId, searchedAt])
+  @@map("recent_searches")
+}
+
+/// Per-provider, per-operation daily counters used for quota visibility and
+/// to decide when to fall back to a secondary provider.
+model ProviderUsage {
+  id           String   @id @default(uuid())
+  provider     String
+  operation    String
+  day          DateTime @db.Date
+  requestCount Int      @default(0) @map("request_count")
+  errorCount   Int      @default(0) @map("error_count")
+  cacheHits    Int      @default(0) @map("cache_hits")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, operation, day])
+  @@map("provider_usage")
+}

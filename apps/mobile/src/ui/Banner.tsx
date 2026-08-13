@@ -1,24 +1,24 @@
-import { Text, useTheme } from '@ui-kitten/components';
 import { StyleSheet, View } from 'react-native';
+import { Txt } from './kit';
+import { colors, radius, spacing } from './tokens';
 
 export function Banner({ tone, message }: { tone: 'danger' | 'success'; message: string }) {
-  const theme = useTheme();
-  const color = theme[tone === 'danger' ? 'color-danger-500' : 'color-success-500'];
-
+  const bg = tone === 'danger' ? colors.dangerSoft : colors.successSoft;
+  const fg = tone === 'danger' ? colors.danger : colors.success;
   return (
-    <View style={[styles.banner, { backgroundColor: `${color}1A` }]}>
-      <Text style={{ color }} category="p2">
+    <View style={[styles.banner, { backgroundColor: bg }]}>
+      <Txt variant="small" color={fg}>
         {message}
-      </Text>
+      </Txt>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   banner: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
   },
 });

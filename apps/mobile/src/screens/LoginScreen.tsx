@@ -1,18 +1,17 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, CheckBox, Input, Spinner, Text } from '@ui-kitten/components';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import {
   clearSavedCredentials,
   getSavedCredentials,
   saveCredentials,
 } from '../lib/credentials';
-import type { AuthStackParamList } from '../navigation/types';
+import type { AuthScreenProps } from '../navigation/types';
+import { Button, Field, Icon, Txt, colors, radius, spacing } from '../ui';
 import { AuthLayout } from '../ui/AuthLayout';
 import { Banner } from '../ui/Banner';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
+type Props = AuthScreenProps<'Login'>;
 
 export function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
@@ -42,7 +41,6 @@ export function LoginScreen({ navigation }: Props) {
       setError('Enter a valid email and password (min 8 characters).');
       return;
     }
-
     setSubmitting(true);
     try {
       const trimmedEmail = email.trim();
@@ -61,8 +59,7 @@ export function LoginScreen({ navigation }: Props) {
     <AuthLayout title="Sign in" subtitle="Welcome back. Let's get you travelling.">
       {error ? <Banner tone="danger" message={error} /> : null}
 
-      <Input
-        style={styles.field}
+      <Field
         label="Email"
         placeholder="you@example.com"
         autoCapitalize="none"
@@ -70,72 +67,83 @@ export function LoginScreen({ navigation }: Props) {
         autoComplete="email"
         value={email}
         onChangeText={setEmail}
+        left={<Icon.PersonIcon color={colors.textDim} size={18} />}
       />
 
-      <Input
-        style={styles.field}
+      <Field
         label="Password"
         placeholder="Min. 8 characters"
         secureTextEntry={secure}
         autoComplete="password"
         value={password}
         onChangeText={setPassword}
+        left={<Icon.SettingsIcon color={colors.textDim} size={18} />}
+        right={
+          <Pressable onPress={() => setSecure((p) => !p)} hitSlop={8}>
+            <Txt variant="small" color={colors.primary}>
+              {secure ? 'Show' : 'Hide'}
+            </Txt>
+          </Pressable>
+        }
       />
 
       <View style={styles.row}>
-        <CheckBox checked={remember} onChange={setRemember}>
-          Remember me
-        </CheckBox>
-        <Button appearance="ghost" size="tiny" onPress={() => setSecure((prev) => !prev)}>
-          {secure ? 'Show password' : 'Hide password'}
-        </Button>
+        <Pressable style={styles.remember} onPress={() => setRemember((p) => !p)}>
+          <View style={[styles.checkbox, remember && styles.checkboxOn]}>
+            {remember ? <Icon.CheckIcon color={colors.onPrimary} size={14} /> : null}
+          </View>
+          <Txt variant="small" color={colors.textDim}>
+            Remember me
+          </Txt>
+        </Pressable>
+        <Pressable onPress={() => navigation.navigate('ForgotPassword')} hitSlop={8}>
+          <Txt variant="small" color={colors.primary}>
+            Forgot password?
+          </Txt>
+        </Pressable>
       </View>
 
       <Button
-        style={styles.submit}
-        size="large"
-        disabled={submitting}
-        accessoryLeft={submitting ? () => <Spinner size="small" status="control" /> : undefined}
+        title={submitting ? 'Signing in…' : 'Sign in'}
+        loading={submitting}
         onPress={() => void onSubmit()}
-      >
-        {submitting ? 'Signing in…' : 'Sign in'}
-      </Button>
-
-      <Button
-        appearance="ghost"
-        size="small"
-        onPress={() => navigation.navigate('ForgotPassword')}
-      >
-        Forgot password?
-      </Button>
+        style={{ marginTop: spacing.sm }}
+      />
 
       <View style={styles.footer}>
-        <Text appearance="hint" category="p2">
-          New here?
-        </Text>
-        <Button appearance="ghost" size="small" onPress={() => navigation.navigate('Register')}>
-          Create an account
-        </Button>
+        <Txt variant="small" color={colors.textDim}>
+          New here?{' '}
+        </Txt>
+        <Pressable onPress={() => navigation.navigate('Register')} hitSlop={8}>
+          <Txt variant="small" color={colors.primary}>
+            Create an account
+          </Txt>
+        </Pressable>
       </View>
     </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  field: {
-    marginBottom: 14,
-  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: spacing.lg,
   },
-  submit: {
-    borderRadius: 14,
+  remember: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   footer: {
-    marginTop: 4,
+    marginTop: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

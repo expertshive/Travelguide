@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
+import { CloseIcon } from './icons';
 
 export function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
@@ -82,7 +84,7 @@ export function TextField({
   hint,
   className,
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: ReactNode }) {
+}: InputHTMLAttributes<HTMLInputElement> & { label?: ReactNode; hint?: ReactNode }) {
   return (
     <label className="block">
       {label ? (
@@ -129,29 +131,135 @@ export function Select({
   );
 }
 
-export function Alert({ tone, children }: { tone: 'error' | 'success'; children: ReactNode }) {
+type AlertTone = 'error' | 'success' | 'warning' | 'info';
+
+const ALERT_TONES: Record<AlertTone, string> = {
+  error: 'bg-red-50 text-red-600',
+  success: 'bg-emerald-50 text-emerald-700',
+  warning: 'bg-amber-50 text-amber-700',
+  info: 'bg-gray-50 text-gray-700',
+};
+
+export function Alert({ tone, children }: { tone: AlertTone; children: ReactNode }) {
   return (
-    <p
-      className={cn(
-        'rounded-xl px-4 py-3 text-sm font-medium',
-        tone === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700',
-      )}
-    >
-      {children}
-    </p>
+    <div className={cn('rounded-xl px-4 py-3 text-sm font-medium', ALERT_TONES[tone])}>{children}</div>
   );
 }
 
-export function Badge({ tone = 'neutral', children }: { tone?: 'ok' | 'off' | 'neutral'; children: ReactNode }) {
-  const tones = {
-    ok: 'bg-emerald-50 text-emerald-700',
-    off: 'bg-red-50 text-red-600',
-    neutral: 'bg-brand-100 text-brand-600',
-  };
+type BadgeTone = 'ok' | 'off' | 'warn' | 'muted' | 'neutral';
+
+const BADGE_TONES: Record<BadgeTone, string> = {
+  ok: 'bg-emerald-50 text-emerald-700',
+  off: 'bg-red-50 text-red-600',
+  warn: 'bg-amber-50 text-amber-700',
+  muted: 'bg-gray-100 text-gray-700',
+  neutral: 'bg-brand-100 text-brand-600',
+};
+
+export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; children: ReactNode }) {
   return (
-    <span className={cn('inline-block rounded-full px-3 py-1 text-xs font-bold', tones[tone])}>
+    <span className={cn('inline-block rounded-full px-3 py-1 text-xs font-bold', BADGE_TONES[tone])}>
       {children}
     </span>
+  );
+}
+
+export function Toggle({
+  checked,
+  label,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors',
+        'disabled:cursor-not-allowed disabled:opacity-60',
+        checked ? 'bg-brand-500' : 'bg-gray-200',
+      )}
+    >
+      <span
+        className={cn(
+          'size-5 rounded-full bg-white shadow-soft transition-transform',
+          checked && 'translate-x-5',
+        )}
+      />
+    </button>
+  );
+}
+
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  size = 'md',
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: 'md' | 'lg';
+}) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        className="absolute inset-0 bg-navy-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={cn(
+          'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-card bg-white shadow-card',
+          size === 'lg' ? 'max-w-2xl' : 'max-w-lg',
+        )}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+          <div>
+            <h3 className="text-lg font-bold text-brand-700">{title}</h3>
+            {subtitle ? <p className="mt-1 text-sm text-gray-700">{subtitle}</p> : null}
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            className="rounded-lg p-1 text-gray-600 transition-colors hover:bg-gray-100 hover:text-brand-700"
+            onClick={onClose}
+          >
+            <CloseIcon className="size-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {footer ? (
+          <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+            {footer}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

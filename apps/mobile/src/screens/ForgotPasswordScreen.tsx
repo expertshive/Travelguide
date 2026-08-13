@@ -1,13 +1,12 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Input, Spinner, Text } from '@ui-kitten/components';
 import { useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import * as authApi from '../lib/auth';
-import type { AuthStackParamList } from '../navigation/types';
+import type { AuthScreenProps } from '../navigation/types';
+import { Button, Field, Txt, colors, radius, spacing } from '../ui';
 import { AuthLayout } from '../ui/AuthLayout';
 import { Banner } from '../ui/Banner';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
+type Props = AuthScreenProps<'ForgotPassword'>;
 
 export function ForgotPasswordScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
@@ -37,8 +36,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
       {error ? <Banner tone="danger" message={error} /> : null}
       {message ? <Banner tone="success" message={message} /> : null}
 
-      <Input
-        style={styles.field}
+      <Field
         label="Email"
         placeholder="you@example.com"
         autoCapitalize="none"
@@ -48,44 +46,39 @@ export function ForgotPasswordScreen({ navigation }: Props) {
       />
 
       {resetToken ? (
-        <Text appearance="hint" category="c1" style={styles.token} selectable>
-          Dev token: {resetToken}
-        </Text>
+        <View style={styles.token}>
+          <Txt variant="small" color={colors.textDim} selectable>
+            Dev token: {resetToken}
+          </Txt>
+        </View>
       ) : null}
 
       <Button
-        style={styles.submit}
-        size="large"
-        disabled={submitting}
-        accessoryLeft={submitting ? () => <Spinner size="small" status="control" /> : undefined}
+        title={submitting ? 'Sending…' : 'Send reset token'}
+        loading={submitting}
         onPress={() => void onSubmit()}
-      >
-        {submitting ? 'Sending…' : 'Send reset token'}
-      </Button>
-
+      />
       <Button
-        appearance="ghost"
-        size="small"
+        title="I have a token"
+        variant="ghost"
+        style={{ marginTop: spacing.sm }}
         onPress={() => navigation.navigate('ResetPassword', { token: resetToken ?? undefined })}
-      >
-        I have a token
-      </Button>
-
-      <Button appearance="ghost" size="small" onPress={() => navigation.navigate('Login')}>
-        Back to sign in
-      </Button>
+      />
+      <Button
+        title="Back to sign in"
+        variant="ghost"
+        style={{ marginTop: spacing.xs }}
+        onPress={() => navigation.navigate('Login')}
+      />
     </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  field: {
-    marginBottom: 14,
-  },
   token: {
-    marginBottom: 14,
-  },
-  submit: {
-    borderRadius: 14,
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
   },
 });

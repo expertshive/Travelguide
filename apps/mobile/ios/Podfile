@@ -15,6 +15,11 @@ if linkage != nil
 end
 
 target 'TravelerGuideMobile' do
+  # react-native-maps with the Google Maps provider (iOS). Must be declared
+  # above use_native_modules! so the Google subspec (GoogleMaps SDK) is linked.
+  rn_maps_path = '../node_modules/react-native-maps'
+  pod 'react-native-maps/Google', :path => rn_maps_path
+
   config = use_native_modules!
 
   use_react_native!(
@@ -30,5 +35,14 @@ target 'TravelerGuideMobile' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Pull the Google Maps key from the git-ignored ios/Maps.xcconfig into the
+    # app target's generated Pods xcconfigs, so $(GOOGLE_MAPS_API_KEY) resolves
+    # on every build (Xcode / `pnpm ios`) without committing the key.
+    Dir.glob(File.join(__dir__, 'Pods', 'Target Support Files', 'Pods-TravelerGuideMobile', '*.xcconfig')).each do |xcconfig|
+      include_line = '#include? "../../../Maps.xcconfig"'
+      contents = File.read(xcconfig)
+      File.open(xcconfig, 'a') { |f| f.puts("\n#{include_line}") } unless contents.include?(include_line)
+    end
   end
 end

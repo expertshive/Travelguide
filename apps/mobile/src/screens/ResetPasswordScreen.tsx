@@ -1,13 +1,11 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button, Input, Spinner } from '@ui-kitten/components';
 import { useState } from 'react';
-import { StyleSheet } from 'react-native';
 import * as authApi from '../lib/auth';
-import type { AuthStackParamList } from '../navigation/types';
+import type { AuthScreenProps } from '../navigation/types';
+import { Button, Field, spacing } from '../ui';
 import { AuthLayout } from '../ui/AuthLayout';
 import { Banner } from '../ui/Banner';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
+type Props = AuthScreenProps<'ResetPassword'>;
 
 export function ResetPasswordScreen({ navigation, route }: Props) {
   const [token, setToken] = useState(route.params?.token ?? '');
@@ -41,24 +39,21 @@ export function ResetPasswordScreen({ navigation, route }: Props) {
       {error ? <Banner tone="danger" message={error} /> : null}
       {message ? <Banner tone="success" message={message} /> : null}
 
-      <Input
-        style={styles.field}
+      <Field
         label="Reset token"
         placeholder="Paste the token from your email"
         autoCapitalize="none"
         value={token}
         onChangeText={setToken}
       />
-      <Input
-        style={styles.field}
+      <Field
         label="New password"
         placeholder="Min. 8 characters"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
-      <Input
-        style={styles.field}
+      <Field
         label="Confirm password"
         placeholder="Repeat your new password"
         secureTextEntry
@@ -67,27 +62,16 @@ export function ResetPasswordScreen({ navigation, route }: Props) {
       />
 
       <Button
-        style={styles.submit}
-        size="large"
-        disabled={submitting}
-        accessoryLeft={submitting ? () => <Spinner size="small" status="control" /> : undefined}
+        title={submitting ? 'Updating…' : 'Update password'}
+        loading={submitting}
         onPress={() => void onSubmit()}
-      >
-        {submitting ? 'Updating…' : 'Update password'}
-      </Button>
-
-      <Button appearance="ghost" size="small" onPress={() => navigation.navigate('Login')}>
-        Back to sign in
-      </Button>
+      />
+      <Button
+        title="Back to sign in"
+        variant="ghost"
+        style={{ marginTop: spacing.sm }}
+        onPress={() => navigation.navigate('Login')}
+      />
     </AuthLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: 14,
-  },
-  submit: {
-    borderRadius: 14,
-  },
-});

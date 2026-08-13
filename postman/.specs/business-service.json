@@ -1,0 +1,438 @@
+{
+ "openapi": "3.0.0",
+ "paths": {
+  "/v1/health": {
+   "get": {
+    "operationId": "HealthController_check",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": "The Health Check is successful",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "ok"
+          },
+          "info": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "error": {
+           "type": "object",
+           "example": {},
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "details": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "The Health Check is not successful",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "error"
+          },
+          "info": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "error": {
+           "type": "object",
+           "example": {
+            "redis": {
+             "status": "down",
+             "message": "Could not connect"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "details": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            },
+            "redis": {
+             "status": "down",
+             "message": "Could not connect"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "summary": "Service health check",
+    "tags": [
+     "Health"
+    ]
+   }
+  },
+  "/v1/business/admin/db/meta": {
+   "get": {
+    "operationId": "BusinessDbAdminController_meta",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Describe this service so the admin can group its tables",
+    "tags": [
+     "DB Admin"
+    ]
+   }
+  },
+  "/v1/business/admin/db/tables": {
+   "get": {
+    "operationId": "BusinessDbAdminController_tables",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "List every table with its column metadata",
+    "tags": [
+     "DB Admin"
+    ]
+   }
+  },
+  "/v1/business/admin/db/tables/{model}": {
+   "get": {
+    "operationId": "BusinessDbAdminController_rows",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "page",
+      "required": true,
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "pageSize",
+      "required": true,
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "search",
+      "required": true,
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Read a page of rows from a table",
+    "tags": [
+     "DB Admin"
+    ]
+   },
+   "post": {
+    "operationId": "BusinessDbAdminController_create",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateRowDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Create a row",
+    "tags": [
+     "DB Admin"
+    ]
+   },
+   "patch": {
+    "operationId": "BusinessDbAdminController_update",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateRowDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Update a row by its primary key",
+    "tags": [
+     "DB Admin"
+    ]
+   },
+   "delete": {
+    "operationId": "BusinessDbAdminController_remove",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DeleteRowDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Delete a row by its primary key",
+    "tags": [
+     "DB Admin"
+    ]
+   }
+  }
+ },
+ "info": {
+  "title": "business-service",
+  "description": "Traveler Guide \u2014 business-service",
+  "version": "1.0",
+  "contact": {}
+ },
+ "tags": [],
+ "servers": [],
+ "components": {
+  "securitySchemes": {
+   "bearer": {
+    "scheme": "bearer",
+    "bearerFormat": "JWT",
+    "type": "http"
+   }
+  },
+  "schemas": {
+   "CreateRowDto": {
+    "type": "object",
+    "properties": {
+     "data": {
+      "type": "object",
+      "description": "Column values for the new row."
+     }
+    },
+    "required": [
+     "data"
+    ]
+   },
+   "UpdateRowDto": {
+    "type": "object",
+    "properties": {
+     "where": {
+      "type": "object",
+      "description": "Primary-key values identifying the row."
+     },
+     "data": {
+      "type": "object",
+      "description": "Editable column values to write."
+     }
+    },
+    "required": [
+     "where",
+     "data"
+    ]
+   },
+   "DeleteRowDto": {
+    "type": "object",
+    "properties": {
+     "where": {
+      "type": "object",
+      "description": "Primary-key values identifying the row."
+     }
+    },
+    "required": [
+     "where"
+    ]
+   }
+  }
+ }
+}

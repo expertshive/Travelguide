@@ -1,7 +1,10 @@
-import { Card, Layout, Text } from '@ui-kitten/components';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Gradient } from './Gradient';
+import { NavigationIcon } from './icons';
+import { Txt } from './kit';
+import { colors, radius, shadow, spacing } from './tokens';
 
 export function AuthLayout({
   title,
@@ -13,60 +16,73 @@ export function AuthLayout({
   children: ReactNode;
 }) {
   return (
-    <Layout style={styles.root} level="2">
-      <SafeAreaView style={styles.root}>
-        <KeyboardAvoidingView
-          style={styles.root}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <View style={styles.root}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-            <Text category="label" appearance="hint" style={styles.eyebrow}>
-              TRAVELER GUIDE
-            </Text>
-            <Text category="h1" style={styles.title}>
-              {title}
-            </Text>
-            <Text appearance="hint" style={styles.subtitle}>
-              {subtitle}
-            </Text>
+          <Gradient name="brand" style={styles.hero}>
+            <SafeAreaView edges={['top']}>
+              <View style={styles.brandRow}>
+                <View style={styles.logo}>
+                  <NavigationIcon color={colors.onPrimary} size={22} />
+                </View>
+                <Txt variant="caption" color="rgba(255,255,255,0.85)" style={styles.brandText}>
+                  TRAVELER GUIDE
+                </Txt>
+              </View>
+              <Txt variant="h1" color={colors.onPrimary} style={styles.title}>
+                {title}
+              </Txt>
+              <Txt variant="body" color="rgba(255,255,255,0.85)" style={styles.subtitle}>
+                {subtitle}
+              </Txt>
+            </SafeAreaView>
+          </Gradient>
 
-            <Card style={styles.card} disabled>
-              {children}
-            </Card>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Layout>
+          <View style={styles.card}>{children}</View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1, paddingBottom: spacing.xxl },
+  hero: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl + spacing.xxl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
-  scroll: {
-    flexGrow: 1,
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
+  logo: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
-  eyebrow: {
-    letterSpacing: 2,
-  },
-  title: {
-    marginTop: 8,
-  },
-  subtitle: {
-    marginTop: 6,
-    marginBottom: 20,
-    lineHeight: 21,
-  },
+  brandText: { letterSpacing: 2 },
+  title: { marginTop: spacing.xl },
+  subtitle: { marginTop: 6, maxWidth: '90%' },
+
+  // The card lifts up into the hero for a layered look. Because both the hero
+  // and the card live inside the ScrollView, the overlap is not clipped.
   card: {
-    borderRadius: 20,
-    borderWidth: 0,
-    shadowColor: '#7090B0',
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 4,
+    marginTop: -spacing.xxl,
+    marginHorizontal: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    ...shadow.card,
   },
 });

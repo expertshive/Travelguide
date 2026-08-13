@@ -1,0 +1,221 @@
+{
+ "openapi": "3.0.0",
+ "paths": {
+  "/v1/health": {
+   "get": {
+    "operationId": "HealthController_check",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": "The Health Check is successful",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "ok"
+          },
+          "info": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "error": {
+           "type": "object",
+           "example": {},
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "details": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "The Health Check is not successful",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "error"
+          },
+          "info": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "error": {
+           "type": "object",
+           "example": {
+            "redis": {
+             "status": "down",
+             "message": "Could not connect"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "details": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            },
+            "redis": {
+             "status": "down",
+             "message": "Could not connect"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "summary": "Service health check",
+    "tags": [
+     "Health"
+    ]
+   }
+  },
+  "/v1/admin/services": {
+   "get": {
+    "operationId": "ServiceCatalogController_services",
+    "parameters": [
+     {
+      "name": "authorization",
+      "required": true,
+      "in": "header",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Every service with its manageable tables, for the admin sidebar",
+    "tags": [
+     "Admin"
+    ]
+   }
+  }
+ },
+ "info": {
+  "title": "api-gateway",
+  "description": "Traveler Guide \u2014 api-gateway",
+  "version": "1.0",
+  "contact": {}
+ },
+ "tags": [],
+ "servers": [],
+ "components": {
+  "securitySchemes": {
+   "bearer": {
+    "scheme": "bearer",
+    "bearerFormat": "JWT",
+    "type": "http"
+   }
+  },
+  "schemas": {}
+ }
+}

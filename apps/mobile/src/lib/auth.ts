@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import {
   clearTokens,
   getAccessToken,
@@ -7,8 +7,45 @@ import {
 } from './storage';
 import type { ApiResponse, AuthTokens, AuthUser } from './types';
 
-const API_BASE =
-  Platform.OS === 'android' ? 'http://10.0.2.2:4000/v1' : 'http://localhost:4000/v1';
+const API_PORT = 4000;
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Used only when the bundle host cannot be read, which in practice means a
+ * release build. Find the current value with `ipconfig getifaddr en0`.
+ */
+const FALLBACK_DEV_HOST = '172.20.10.2';
+
+/**
+ * Host serving the JS bundle, which is by definition the development machine —
+ * the same one running the API.
+ *
+ * A physical iPhone cannot reach the Mac as `localhost`, so it needs the Mac's
+ * LAN address, and hard-coding that address means the app silently stops working
+ * every time the Mac changes network. Metro already had to tell the device where
+ * to fetch the bundle from, so that address is reused instead of being maintained
+ * by hand.
+ */
+function bundleHost(): string | null {
+  const scriptUrl = (NativeModules.SourceCode?.scriptURL ?? '') as string;
+  // e.g. http://192.168.1.20:8081/index.bundle?platform=ios — take the hostname.
+  // A bundle read from disk reports a file:// URL, which names no host — the
+  // pattern only matches http(s), so that case falls through to null.
+  const match = /^https?:\/\/([^/:]+)/.exec(scriptUrl);
+  return match?.[1] ?? null;
+}
+
+function resolveApiBase(): string {
+  // The Android emulator reaches its host only through this alias.
+  if (Platform.OS === 'android') {
+    const host = bundleHost();
+    const usable = host && host !== 'localhost' && host !== '127.0.0.1' ? host : '10.0.2.2';
+    return `http://${usable}:${API_PORT}/v1`;
+  }
+  return `http://${bundleHost() ?? FALLBACK_DEV_HOST}:${API_PORT}/v1`;
+}
+
+const API_BASE = resolveApiBase();
 
 async function request<T>(path: string, init: RequestInit = {}, auth = false): Promise<T> {
   const headers = new Headers(init.headers ?? {});
@@ -23,7 +60,25 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  // Without a deadline an unreachable host leaves the promise pending forever:
+  // a TCP connect to a dead address on the local subnet is dropped rather than
+  // refused, so the app would sit on its loading screen indefinitely instead of
+  // reporting that the backend is down.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Could not reach the server at ${API_BASE}. Is it running?`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+
   const payload = (await response.json()) as ApiResponse<T>;
 
   if (!response.ok || !payload.success) {

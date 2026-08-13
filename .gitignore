@@ -42,3 +42,7 @@ apps/mobile/android/build
 apps/mobile/android/app/build
 apps/mobile/android/app/.cxx
 apps/mobile/android/.kotlin
+
+# iOS Google Maps key (do not commit)
+apps/mobile/ios/Maps.xcconfig
+radio-main.zip

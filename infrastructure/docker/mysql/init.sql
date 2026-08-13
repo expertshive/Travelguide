@@ -3,6 +3,7 @@ CREATE DATABASE IF NOT EXISTS traveler_user CHARACTER SET utf8mb4 COLLATE utf8mb
 CREATE DATABASE IF NOT EXISTS traveler_trip CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS traveler_place CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS traveler_navigation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS traveler_map CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS traveler_social CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS traveler_chat CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS traveler_notification CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -16,6 +17,7 @@ GRANT ALL PRIVILEGES ON traveler_user.* TO 'traveler'@'%';
 GRANT ALL PRIVILEGES ON traveler_trip.* TO 'traveler'@'%';
 GRANT ALL PRIVILEGES ON traveler_place.* TO 'traveler'@'%';
 GRANT ALL PRIVILEGES ON traveler_navigation.* TO 'traveler'@'%';
+GRANT ALL PRIVILEGES ON traveler_map.* TO 'traveler'@'%';
 GRANT ALL PRIVILEGES ON traveler_social.* TO 'traveler'@'%';
 GRANT ALL PRIVILEGES ON traveler_chat.* TO 'traveler'@'%';
 GRANT ALL PRIVILEGES ON traveler_notification.* TO 'traveler'@'%';

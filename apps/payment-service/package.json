@@ -25,8 +25,10 @@
     "@nestjs/swagger": "^8.1.0",
     "@nestjs/terminus": "^10.2.3",
     "@nestjs/websockets": "^10.4.15",
+    "@prisma/client": "^6.1.0",
     "@traveler-guide/config": "workspace:*",
     "@traveler-guide/contracts": "workspace:*",
+    "@traveler-guide/db-admin": "workspace:*",
     "@traveler-guide/logger": "workspace:*",
     "@traveler-guide/types": "workspace:*",
     "amqplib": "^0.10.5",
@@ -37,8 +39,7 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.1",
-    "@prisma/client": "^6.1.0"
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",

@@ -95,3 +95,26 @@ To learn more about React Native, take a look at the following resources:
 - [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
 - [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
 - [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+
+## Google Maps (react-native-maps)
+
+The in-app map and turn-by-turn navigation use **react-native-maps** with the
+**Google** provider. You must supply a Google Maps client API key for tiles to
+render (the app builds and runs without one — the map is just blank).
+
+Create keys in Google Cloud Console (enable **Maps SDK for Android** and **Maps
+SDK for iOS**), then:
+
+- **Android** — put the key in `android/gradle.properties`:
+  ```properties
+  GOOGLE_MAPS_API_KEY=YOUR_ANDROID_KEY
+  ```
+  It is injected into `AndroidManifest.xml` via `manifestPlaceholders`.
+
+- **iOS** — set the `GOOGLE_MAPS_API_KEY` build setting (or replace the
+  `GMSApiKey` value in `ios/TravelerGuideMobile/Info.plist`). `AppDelegate.swift`
+  reads it and calls `GMSServices.provideAPIKey`.
+
+Location permission strings are already declared (Info.plist + AndroidManifest).
+Routing and geocoding data come from the backend map service; Google only
+renders the map view.

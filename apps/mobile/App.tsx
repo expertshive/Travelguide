@@ -1,20 +1,24 @@
-import * as eva from '@eva-design/eva';
-import { ApplicationProvider } from '@ui-kitten/components';
+import { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
+import { loadAssistantPrefs } from './src/lib/assistantPrefs';
+import { setAssistantVoice } from './src/lib/tts';
 import { AppNavigator } from './src/navigation/AppNavigator';
-import theme from './src/theme/theme.json';
+import { colors } from './src/ui';
 
 export default function App() {
+  // Apply the saved assistant voice (gender + language) on launch.
+  useEffect(() => {
+    void loadAssistantPrefs().then((p) => setAssistantVoice(p.gender, p.language));
+  }, []);
+
   return (
     <SafeAreaProvider>
-      <ApplicationProvider {...eva} theme={{ ...eva.light, ...theme }}>
-        <AuthProvider>
-          <StatusBar barStyle="dark-content" />
-          <AppNavigator />
-        </AuthProvider>
-      </ApplicationProvider>
+      <AuthProvider>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
+        <AppNavigator />
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

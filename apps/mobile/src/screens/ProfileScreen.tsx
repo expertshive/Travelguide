@@ -1,253 +1,308 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useCallback, useState } from 'react';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { PLATFORM_LABELS, getMyProfile, resolveMediaUrl } from '../lib/profile';
+import type { UserProfile } from '../lib/types';
+import type { TabScreenProps } from '../navigation/types';
 import {
+  Avatar,
   Button,
   Card,
-  Divider,
-  Layout,
-  Spinner,
-  Text,
-  TopNavigation,
-  TopNavigationAction,
-} from '@ui-kitten/components';
-import { useCallback, useState } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
-import { getMyProfile, PLATFORM_LABELS, resolveMediaUrl } from '../lib/profile';
-import type { UserProfile } from '../lib/types';
-import type { AppStackParamList } from '../navigation/types';
-import { Banner } from '../ui/Banner';
-import { accessory, BackIcon, EditIcon } from '../ui/icons';
+  Gradient,
+  Icon,
+  Txt,
+  colors,
+  radius,
+  shadow,
+  spacing,
+} from '../ui';
 
-type Props = NativeStackScreenProps<AppStackParamList, 'Profile'>;
+type Props = TabScreenProps<'Profile'>;
 
 export function ProfileScreen({ navigation }: Props) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setProfile(await getMyProfile());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load profile');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      let active = true;
+      getMyProfile()
+        .then((p) => active && setProfile(p))
+        .catch(() => {});
+      return () => {
+        active = false;
+      };
+    }, []),
   );
 
-  const avatarUri = resolveMediaUrl(profile?.avatarUrl);
-  const initials = (profile?.displayName || user?.name || user?.email || '?')
-    .charAt(0)
-    .toUpperCase();
+  if (!user) return null;
+
+  const avatarUrl = resolveMediaUrl(profile?.avatarUrl);
+  const displayName = profile?.displayName || user.name;
+  const memberSince = new Date(user.createdAt).getFullYear();
 
   return (
-    <Layout style={styles.root} level="2">
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <TopNavigation
-          alignment="center"
-          title="My profile"
-          accessoryLeft={() => (
-            <TopNavigationAction icon={accessory(BackIcon)} onPress={() => navigation.goBack()} />
-          )}
-          accessoryRight={() => (
-            <TopNavigationAction
-              icon={accessory(EditIcon)}
+    <View style={styles.root}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Gradient name="brand" style={styles.header}>
+          <View style={styles.headerTop}>
+            <Txt variant="title" color={colors.onPrimary}>
+              Profile
+            </Txt>
+            <Pressable
+              style={styles.editBtn}
               onPress={() => navigation.navigate('EditProfile')}
-            />
-          )}
-        />
-        <Divider />
-
-        {loading ? (
-          <View style={styles.centered}>
-            <Spinner size="large" />
+            >
+              <Icon.EditIcon color={colors.onPrimary} size={16} />
+              <Txt variant="small" color={colors.onPrimary}>
+                Edit
+              </Txt>
+            </Pressable>
           </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            {error ? <Banner tone="danger" message={error} /> : null}
 
-            <Card style={styles.card} disabled>
-              <View style={styles.identity}>
-                {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarFallback]}>
-                    <Text category="h4" status="control">
-                      {initials}
-                    </Text>
-                  </View>
-                )}
-                <Text category="h6" style={styles.name}>
-                  {profile?.displayName || user?.name}
-                </Text>
-                <Text appearance="hint" category="p2">
-                  {user?.email}
-                </Text>
-                {profile?.location ? (
-                  <Text appearance="hint" category="p2">
-                    {profile.location}
-                  </Text>
-                ) : null}
+          <View style={styles.identity}>
+            <Avatar uri={avatarUrl} name={displayName} size={84} ring />
+            <Txt variant="h2" color={colors.onPrimary} style={{ marginTop: spacing.md }}>
+              {displayName}
+            </Txt>
+            <Txt variant="small" color="rgba(255,255,255,0.85)">
+              {user.email}
+            </Txt>
+            {profile?.location ? (
+              <View style={styles.locationRow}>
+                <Icon.MapPinIcon color="rgba(255,255,255,0.85)" size={14} />
+                <Txt variant="small" color="rgba(255,255,255,0.85)">
+                  {profile.location}
+                </Txt>
               </View>
+            ) : null}
+          </View>
+        </Gradient>
 
-              <Button
-                style={styles.editButton}
-                size="small"
-                accessoryLeft={accessory(EditIcon, { size: 18, color: '#fff' })}
-                onPress={() => navigation.navigate('EditProfile')}
-              >
-                Edit profile
-              </Button>
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <Stat value={String(profile?.photos.length ?? 0)} label="Photos" />
+          <View style={styles.statDivider} />
+          <Stat value={String(profile?.socialLinks.length ?? 0)} label="Links" />
+          <View style={styles.statDivider} />
+          <Stat value={String(memberSince)} label="Since" />
+        </View>
+
+        {/* Bio */}
+        {profile?.bio ? (
+          <Section title="About">
+            <Card elevation="soft">
+              <Txt variant="body" color={colors.text}>
+                {profile.bio}
+              </Txt>
             </Card>
+          </Section>
+        ) : null}
 
-            <Card style={styles.card} disabled>
-              <Text category="s1">Bio</Text>
-              <Text style={styles.bio} appearance={profile?.bio ? 'default' : 'hint'}>
-                {profile?.bio || 'No bio yet. Tap Edit to add one.'}
-              </Text>
-
-              {profile?.website ? (
-                <>
-                  <Divider style={styles.divider} />
-                  <Text category="s1">Website</Text>
-                  <Text
-                    status="primary"
-                    style={styles.link}
-                    onPress={() => void Linking.openURL(profile.website!)}
-                  >
-                    {profile.website}
-                  </Text>
-                </>
-              ) : null}
-            </Card>
-
-            <Card style={styles.card} disabled>
-              <Text category="s1" style={styles.sectionTitle}>
-                Social accounts
-              </Text>
-              {profile?.socialLinks.length ? (
-                profile.socialLinks.map((link) => (
-                  <View key={link.id} style={styles.socialRow}>
-                    <Text category="label">{PLATFORM_LABELS[link.platform] ?? link.platform}</Text>
-                    <Text
-                      status="primary"
-                      category="p2"
-                      numberOfLines={1}
-                      style={styles.link}
-                      onPress={() => void Linking.openURL(link.url)}
-                    >
-                      {link.url}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text appearance="hint" category="p2">
-                  No social accounts linked yet.
-                </Text>
-              )}
-            </Card>
-
-            <Card style={styles.card} disabled>
-              <Text category="s1" style={styles.sectionTitle}>
-                Photos
-              </Text>
-              {profile?.photos.length ? (
-                <View style={styles.photoGrid}>
-                  {profile.photos.map((photo) => (
-                    <Image
-                      key={photo.id}
-                      source={{ uri: resolveMediaUrl(photo.url) ?? '' }}
-                      style={styles.photo}
-                    />
-                  ))}
+        {/* Website */}
+        {profile?.website ? (
+          <Section title="Website">
+            <Pressable onPress={() => void Linking.openURL(profile.website as string)}>
+              <Card elevation="soft" style={styles.linkRow}>
+                <View style={styles.linkIcon}>
+                  <Icon.GlobeIcon color={colors.primary} size={18} />
                 </View>
-              ) : (
-                <Text appearance="hint" category="p2">
-                  No photos yet.
-                </Text>
-              )}
+                <Txt variant="body" color={colors.primary} numberOfLines={1} style={{ flex: 1 }}>
+                  {profile.website}
+                </Txt>
+                <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
+              </Card>
+            </Pressable>
+          </Section>
+        ) : null}
+
+        {/* Social links */}
+        {profile?.socialLinks.length ? (
+          <Section title="Social">
+            <Card padded={false} elevation="soft">
+              {profile.socialLinks.map((link, i) => (
+                <Pressable
+                  key={link.id}
+                  style={[styles.social, i > 0 && styles.socialBorder]}
+                  onPress={() => void Linking.openURL(link.url)}
+                >
+                  <View style={styles.linkIcon}>
+                    <Icon.LinkIcon color={colors.primary} size={16} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyStrong">{PLATFORM_LABELS[link.platform] ?? link.platform}</Txt>
+                    <Txt variant="small" color={colors.textDim} numberOfLines={1}>
+                      {link.url}
+                    </Txt>
+                  </View>
+                  <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
+                </Pressable>
+              ))}
             </Card>
-          </ScrollView>
-        )}
-      </SafeAreaView>
-    </Layout>
+          </Section>
+        ) : null}
+
+        {/* Photos */}
+        {profile?.photos.length ? (
+          <Section title="Photos">
+            <View style={styles.photoGrid}>
+              {profile.photos.map((photo) => {
+                const url = resolveMediaUrl(photo.url);
+                return url ? (
+                  <Image key={photo.id} source={{ uri: url }} style={styles.photo} />
+                ) : null;
+              })}
+            </View>
+          </Section>
+        ) : null}
+
+        {/* Assistant */}
+        <Section title="Assistant">
+          <Pressable onPress={() => navigation.navigate('AssistantSettings')}>
+            <Card elevation="soft" style={styles.linkRow}>
+              <View style={styles.linkIcon}>
+                <Icon.SparkleIcon color={colors.primary} size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt variant="bodyStrong">Voice assistant</Txt>
+                <Txt variant="small" color={colors.textDim}>
+                  Choose voice, gender & language
+                </Txt>
+              </View>
+              <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
+            </Card>
+          </Pressable>
+        </Section>
+
+        {/* Account */}
+        <Section title="Account">
+          <Card padded={false} elevation="soft">
+            <View style={styles.accountRow}>
+              <Txt variant="body" color={colors.textDim}>
+                Roles
+              </Txt>
+              <Txt variant="bodyStrong">{user.roles.join(', ') || 'None'}</Txt>
+            </View>
+            <View style={[styles.accountRow, styles.socialBorder]}>
+              <Txt variant="body" color={colors.textDim}>
+                Mobile
+              </Txt>
+              <Txt variant="bodyStrong">{user.mobile}</Txt>
+            </View>
+          </Card>
+
+          <View style={{ marginTop: spacing.lg }}>
+            <Button
+              title="Sign out"
+              variant="danger"
+              left={<Icon.LogoutIcon color={colors.danger} size={18} />}
+              onPress={() => void logout()}
+            />
+          </View>
+        </Section>
+      </ScrollView>
+    </View>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Txt variant="h3" style={{ marginBottom: spacing.md }}>
+        {title}
+      </Txt>
+      {children}
+    </View>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Txt variant="h3">{value}</Txt>
+      <Txt variant="caption" color={colors.textFaint}>
+        {label.toUpperCase()}
+      </Txt>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingBottom: 120 },
+
+  header: {
+    paddingTop: spacing.xxxl + spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl + spacing.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scroll: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  card: {
-    borderRadius: 20,
-    borderWidth: 0,
-    marginBottom: 16,
-  },
-  identity: {
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    marginBottom: 12,
-  },
-  avatarFallback: {
-    backgroundColor: '#7551FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  name: {
-    marginBottom: 2,
-  },
-  editButton: {
-    marginTop: 18,
-    borderRadius: 14,
-  },
-  bio: {
-    marginTop: 6,
-    lineHeight: 21,
-  },
-  divider: {
-    marginVertical: 14,
-  },
-  link: {
-    marginTop: 4,
-  },
-  sectionTitle: {
-    marginBottom: 10,
-  },
-  socialRow: {
-    marginBottom: 12,
-  },
-  photoGrid: {
+  headerTop: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  identity: { alignItems: 'center', marginTop: spacing.lg },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.xl,
+    marginTop: -spacing.xxl,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.lg,
+    ...shadow.card,
+  },
+  stat: { flex: 1, alignItems: 'center' },
+  statDivider: { width: 1, height: 32, backgroundColor: colors.border },
+
+  section: { paddingHorizontal: spacing.xl, marginTop: spacing.xxl },
+
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  linkIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  social: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  socialBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   photo: {
-    width: '47%',
-    height: 120,
-    borderRadius: 14,
-    backgroundColor: '#E9EDF7',
+    width: '31.5%',
+    aspectRatio: 1,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
 });

@@ -1,0 +1,1397 @@
+{
+ "openapi": "3.0.0",
+ "paths": {
+  "/v1/health": {
+   "get": {
+    "operationId": "HealthController_check",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": "The Health Check is successful",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "ok"
+          },
+          "info": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "error": {
+           "type": "object",
+           "example": {},
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "details": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "The Health Check is not successful",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "string",
+           "example": "error"
+          },
+          "info": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "error": {
+           "type": "object",
+           "example": {
+            "redis": {
+             "status": "down",
+             "message": "Could not connect"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           },
+           "nullable": true
+          },
+          "details": {
+           "type": "object",
+           "example": {
+            "database": {
+             "status": "up"
+            },
+            "redis": {
+             "status": "down",
+             "message": "Could not connect"
+            }
+           },
+           "additionalProperties": {
+            "type": "object",
+            "required": [
+             "status"
+            ],
+            "properties": {
+             "status": {
+              "type": "string"
+             }
+            },
+            "additionalProperties": true
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "summary": "Service health check",
+    "tags": [
+     "Health"
+    ]
+   }
+  },
+  "/v1/auth/register/send-otp": {
+   "post": {
+    "operationId": "AuthController_sendRegisterOtp",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SendRegisterOtpDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "summary": "Send OTP for registration",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/register/verify-otp": {
+   "post": {
+    "operationId": "AuthController_verifyRegisterOtp",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VerifyRegisterOtpDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "summary": "Verify OTP and complete registration",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/login": {
+   "post": {
+    "operationId": "AuthController_login",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoginDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "summary": "Login and receive JWT tokens",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/refresh": {
+   "post": {
+    "operationId": "AuthController_refresh",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RefreshDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "summary": "Refresh access token using a refresh token",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/forgot-password": {
+   "post": {
+    "operationId": "AuthController_forgotPassword",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ForgotPasswordDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "summary": "Request a password reset email",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/reset-password": {
+   "post": {
+    "operationId": "AuthController_resetPassword",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResetPasswordDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "summary": "Reset password using a valid reset token",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/logout": {
+   "post": {
+    "operationId": "AuthController_logout",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LogoutDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Logout and revoke refresh tokens",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/me": {
+   "get": {
+    "operationId": "AuthController_me",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Get current authenticated user profile",
+    "tags": [
+     "Auth"
+    ]
+   }
+  },
+  "/v1/auth/users": {
+   "get": {
+    "operationId": "UsersController_list",
+    "parameters": [
+     {
+      "name": "page",
+      "required": false,
+      "in": "query",
+      "schema": {
+       "default": 1,
+       "type": "number"
+      }
+     },
+     {
+      "name": "pageSize",
+      "required": false,
+      "in": "query",
+      "schema": {
+       "default": 20,
+       "type": "number"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "List all users (admin)",
+    "tags": [
+     "Users"
+    ]
+   }
+  },
+  "/v1/auth/users/{id}": {
+   "get": {
+    "operationId": "UsersController_get",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Get user by ID",
+    "tags": [
+     "Users"
+    ]
+   },
+   "patch": {
+    "operationId": "UsersController_update",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateUserDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Update user (activate/deactivate)",
+    "tags": [
+     "Users"
+    ]
+   }
+  },
+  "/v1/auth/users/{id}/roles": {
+   "post": {
+    "operationId": "UsersController_assignRole",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AssignUserRoleDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Assign role to user",
+    "tags": [
+     "Users"
+    ]
+   }
+  },
+  "/v1/auth/users/{id}/roles/{roleName}": {
+   "delete": {
+    "operationId": "UsersController_removeRole",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "roleName",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Remove role from user",
+    "tags": [
+     "Users"
+    ]
+   }
+  },
+  "/v1/auth/roles/permissions/list": {
+   "get": {
+    "operationId": "RolesController_listPermissions",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "List all permissions",
+    "tags": [
+     "Roles"
+    ]
+   }
+  },
+  "/v1/auth/roles": {
+   "get": {
+    "operationId": "RolesController_list",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "List all roles",
+    "tags": [
+     "Roles"
+    ]
+   },
+   "post": {
+    "operationId": "RolesController_create",
+    "parameters": [],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateRoleDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Create a new role",
+    "tags": [
+     "Roles"
+    ]
+   }
+  },
+  "/v1/auth/roles/{id}": {
+   "get": {
+    "operationId": "RolesController_get",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Get role by ID",
+    "tags": [
+     "Roles"
+    ]
+   },
+   "patch": {
+    "operationId": "RolesController_update",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateRoleDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Update role metadata",
+    "tags": [
+     "Roles"
+    ]
+   },
+   "delete": {
+    "operationId": "RolesController_remove",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Delete a role",
+    "tags": [
+     "Roles"
+    ]
+   }
+  },
+  "/v1/auth/roles/{id}/permissions": {
+   "put": {
+    "operationId": "RolesController_setPermissions",
+    "parameters": [
+     {
+      "name": "id",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AssignRolePermissionsDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Replace role permissions",
+    "tags": [
+     "Roles"
+    ]
+   }
+  },
+  "/v1/auth/admin/db/meta": {
+   "get": {
+    "operationId": "AuthDbAdminController_meta",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Describe this service so the admin can group its tables",
+    "tags": [
+     "DB Admin"
+    ]
+   }
+  },
+  "/v1/auth/admin/db/tables": {
+   "get": {
+    "operationId": "AuthDbAdminController_tables",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "List every table with its column metadata",
+    "tags": [
+     "DB Admin"
+    ]
+   }
+  },
+  "/v1/auth/admin/db/tables/{model}": {
+   "get": {
+    "operationId": "AuthDbAdminController_rows",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "page",
+      "required": true,
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "pageSize",
+      "required": true,
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "search",
+      "required": true,
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Read a page of rows from a table",
+    "tags": [
+     "DB Admin"
+    ]
+   },
+   "post": {
+    "operationId": "AuthDbAdminController_create",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateRowDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Create a row",
+    "tags": [
+     "DB Admin"
+    ]
+   },
+   "patch": {
+    "operationId": "AuthDbAdminController_update",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateRowDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Update a row by its primary key",
+    "tags": [
+     "DB Admin"
+    ]
+   },
+   "delete": {
+    "operationId": "AuthDbAdminController_remove",
+    "parameters": [
+     {
+      "name": "model",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DeleteRowDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Delete a row by its primary key",
+    "tags": [
+     "DB Admin"
+    ]
+   }
+  },
+  "/v1/auth/admin/integrations": {
+   "get": {
+    "operationId": "IntegrationsController_list",
+    "parameters": [],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Every integration with its configuration status",
+    "tags": [
+     "Integrations"
+    ]
+   }
+  },
+  "/v1/auth/admin/integrations/{provider}": {
+   "get": {
+    "operationId": "IntegrationsController_get",
+    "parameters": [
+     {
+      "name": "provider",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "One integration",
+    "tags": [
+     "Integrations"
+    ]
+   },
+   "put": {
+    "operationId": "IntegrationsController_update",
+    "parameters": [
+     {
+      "name": "provider",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpdateIntegrationDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Set or clear credential fields",
+    "tags": [
+     "Integrations"
+    ]
+   },
+   "patch": {
+    "operationId": "IntegrationsController_toggle",
+    "parameters": [
+     {
+      "name": "provider",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ToggleIntegrationDto"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Enable or disable an integration",
+    "tags": [
+     "Integrations"
+    ]
+   },
+   "delete": {
+    "operationId": "IntegrationsController_clear",
+    "parameters": [
+     {
+      "name": "provider",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Remove stored credentials, reverting to environment variables",
+    "tags": [
+     "Integrations"
+    ]
+   }
+  },
+  "/v1/auth/admin/integrations/{provider}/test": {
+   "post": {
+    "operationId": "IntegrationsController_test",
+    "parameters": [
+     {
+      "name": "provider",
+      "required": true,
+      "in": "path",
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "201": {
+      "description": ""
+     }
+    },
+    "security": [
+     {
+      "bearer": []
+     }
+    ],
+    "summary": "Make a live call to the provider and report the result",
+    "tags": [
+     "Integrations"
+    ]
+   }
+  }
+ },
+ "info": {
+  "title": "auth-service",
+  "description": "Traveler Guide \u2014 auth-service",
+  "version": "1.0",
+  "contact": {}
+ },
+ "tags": [],
+ "servers": [],
+ "components": {
+  "securitySchemes": {
+   "bearer": {
+    "scheme": "bearer",
+    "bearerFormat": "JWT",
+    "type": "http"
+   }
+  },
+  "schemas": {
+   "SendRegisterOtpDto": {
+    "type": "object",
+    "properties": {
+     "email": {
+      "type": "string",
+      "example": "user@example.com"
+     },
+     "name": {
+      "type": "string",
+      "example": "John Doe"
+     },
+     "mobile": {
+      "type": "string",
+      "example": "+966501234567"
+     },
+     "password": {
+      "type": "string",
+      "minLength": 8
+     },
+     "confirmPassword": {
+      "type": "string",
+      "minLength": 8
+     }
+    },
+    "required": [
+     "email",
+     "name",
+     "mobile",
+     "password",
+     "confirmPassword"
+    ]
+   },
+   "VerifyRegisterOtpDto": {
+    "type": "object",
+    "properties": {
+     "email": {
+      "type": "string",
+      "example": "user@example.com"
+     },
+     "otp": {
+      "type": "string",
+      "example": "0000"
+     }
+    },
+    "required": [
+     "email",
+     "otp"
+    ]
+   },
+   "LoginDto": {
+    "type": "object",
+    "properties": {
+     "email": {
+      "type": "string",
+      "example": "user@example.com"
+     },
+     "password": {
+      "type": "string",
+      "minLength": 8
+     }
+    },
+    "required": [
+     "email",
+     "password"
+    ]
+   },
+   "RefreshDto": {
+    "type": "object",
+    "properties": {
+     "refreshToken": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "refreshToken"
+    ]
+   },
+   "ForgotPasswordDto": {
+    "type": "object",
+    "properties": {
+     "email": {
+      "type": "string",
+      "example": "user@example.com"
+     }
+    },
+    "required": [
+     "email"
+    ]
+   },
+   "ResetPasswordDto": {
+    "type": "object",
+    "properties": {
+     "token": {
+      "type": "string"
+     },
+     "password": {
+      "type": "string",
+      "minLength": 8
+     }
+    },
+    "required": [
+     "token",
+     "password"
+    ]
+   },
+   "LogoutDto": {
+    "type": "object",
+    "properties": {
+     "refreshToken": {
+      "type": "string",
+      "description": "Refresh token to revoke. Omit to logout current session only."
+     }
+    }
+   },
+   "UpdateUserDto": {
+    "type": "object",
+    "properties": {
+     "isActive": {
+      "type": "boolean"
+     }
+    }
+   },
+   "AssignUserRoleDto": {
+    "type": "object",
+    "properties": {
+     "roleName": {
+      "type": "string",
+      "example": "admin"
+     }
+    },
+    "required": [
+     "roleName"
+    ]
+   },
+   "CreateRoleDto": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string",
+      "example": "guide"
+     },
+     "description": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ]
+   },
+   "UpdateRoleDto": {
+    "type": "object",
+    "properties": {
+     "description": {
+      "type": "string"
+     }
+    }
+   },
+   "AssignRolePermissionsDto": {
+    "type": "object",
+    "properties": {
+     "permissions": {
+      "example": [
+       "user:read",
+       "trip:read"
+      ],
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "permissions"
+    ]
+   },
+   "CreateRowDto": {
+    "type": "object",
+    "properties": {
+     "data": {
+      "type": "object",
+      "description": "Column values for the new row."
+     }
+    },
+    "required": [
+     "data"
+    ]
+   },
+   "UpdateRowDto": {
+    "type": "object",
+    "properties": {
+     "where": {
+      "type": "object",
+      "description": "Primary-key values identifying the row."
+     },
+     "data": {
+      "type": "object",
+      "description": "Editable column values to write."
+     }
+    },
+    "required": [
+     "where",
+     "data"
+    ]
+   },
+   "DeleteRowDto": {
+    "type": "object",
+    "properties": {
+     "where": {
+      "type": "object",
+      "description": "Primary-key values identifying the row."
+     }
+    },
+    "required": [
+     "where"
+    ]
+   },
+   "UpdateIntegrationDto": {
+    "type": "object",
+    "properties": {
+     "values": {
+      "type": "object",
+      "description": "Field values keyed by name, e.g. { \"GEMINI_API_KEY\": \"\u2026\" }. Omit a field to leave it unchanged; send an empty string to clear it and fall back to the environment variable."
+     }
+    },
+    "required": [
+     "values"
+    ]
+   },
+   "ToggleIntegrationDto": {
+    "type": "object",
+    "properties": {
+     "enabled": {
+      "type": "boolean",
+      "description": "Whether the integration may be used."
+     }
+    },
+    "required": [
+     "enabled"
+    ]
+   }
+  }
+ }
+}

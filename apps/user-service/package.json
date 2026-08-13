@@ -28,6 +28,7 @@
     "@prisma/client": "^6.1.0",
     "@traveler-guide/config": "workspace:*",
     "@traveler-guide/contracts": "workspace:*",
+    "@traveler-guide/db-admin": "workspace:*",
     "@traveler-guide/logger": "workspace:*",
     "@traveler-guide/types": "workspace:*",
     "amqplib": "^0.10.5",

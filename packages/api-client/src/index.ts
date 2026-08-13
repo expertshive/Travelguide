@@ -5,13 +5,19 @@ import type {
   AuthTokens,
   AuthUser,
   CreateRoleRequest,
+  DbRowsResult,
+  DbTableMeta,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  IntegrationsOverview,
+  IntegrationStatus,
+  IntegrationTestResult,
   LoginRequest,
   LogoutRequest,
   PaginatedResult,
   PermissionEntity,
   RefreshRequest,
+  ServiceCatalogEntry,
   SendRegisterOtpRequest,
   SendRegisterOtpResponse,
   VerifyRegisterOtpRequest,
@@ -19,6 +25,7 @@ import type {
   ResetPasswordRequest,
   RoleEntity,
   UpdateProfileRequest,
+  UpdateRoleRequest,
   UpsertSocialLinkRequest,
   UserProfile,
   UserSummary,
@@ -83,8 +90,11 @@ export class ApiClient {
     return this.request<T>(path, { method: 'POST', body: form });
   }
 
-  delete<T>(path: string) {
-    return this.request<T>(path, { method: 'DELETE' });
+  delete<T>(path: string, body?: unknown) {
+    return this.request<T>(path, {
+      method: 'DELETE',
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
   }
 }
 
@@ -204,12 +214,111 @@ export class AuthApi {
     return this.client.post<RoleEntity>('/auth/roles', input);
   }
 
+  async updateRole(roleId: string, input: UpdateRoleRequest): Promise<RoleEntity> {
+    return this.client.patch<RoleEntity>(`/auth/roles/${roleId}`, input);
+  }
+
   async setRolePermissions(roleId: string, input: AssignRolePermissionsRequest): Promise<RoleEntity> {
     return this.client.put<RoleEntity>(`/auth/roles/${roleId}/permissions`, input);
   }
 
   async deleteRole(roleId: string): Promise<{ success: boolean }> {
     return this.client.delete<{ success: boolean }>(`/auth/roles/${roleId}`);
+  }
+
+  // -- Dynamic database admin (schema-driven, admin:access only) -------------
+  //
+  // Every service exposes the same table editor under its own path segment, so
+  // these take the segment (`auth`, `map`, `trips`, …) as their first argument.
+
+  /** Every service with its tables, in one gateway round trip. */
+  async listServices(): Promise<ServiceCatalogEntry[]> {
+    return this.client.get<ServiceCatalogEntry[]>('/admin/services');
+  }
+
+  async listDbTables(segment: string): Promise<DbTableMeta[]> {
+    return this.client.get<DbTableMeta[]>(`/${segment}/admin/db/tables`);
+  }
+
+  async getDbRows(
+    segment: string,
+    model: string,
+    params: { page?: number; pageSize?: number; search?: string } = {},
+  ): Promise<DbRowsResult> {
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search?.trim()) query.set('search', params.search.trim());
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.client.get<DbRowsResult>(`/${segment}/admin/db/tables/${model}${suffix}`);
+  }
+
+  async createDbRow(
+    segment: string,
+    model: string,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(`/${segment}/admin/db/tables/${model}`, {
+      data,
+    });
+  }
+
+  async updateDbRow(
+    segment: string,
+    model: string,
+    where: Record<string, string>,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.client.patch<Record<string, unknown>>(`/${segment}/admin/db/tables/${model}`, {
+      where,
+      data,
+    });
+  }
+
+  async deleteDbRow(
+    segment: string,
+    model: string,
+    where: Record<string, string>,
+  ): Promise<{ success: boolean }> {
+    return this.client.delete<{ success: boolean }>(`/${segment}/admin/db/tables/${model}`, {
+      where,
+    });
+  }
+
+  // -- Third-party integrations (admin:access only) ---------------------------
+
+  async listIntegrations(): Promise<IntegrationsOverview> {
+    return this.client.get<IntegrationsOverview>('/auth/admin/integrations');
+  }
+
+  /**
+   * Omit a field to leave it unchanged — the form shows masked secrets, so only
+   * what the admin actually retyped is sent. An empty string clears the stored
+   * value and falls back to the environment variable.
+   */
+  async updateIntegration(
+    provider: string,
+    values: Record<string, string>,
+  ): Promise<IntegrationStatus> {
+    return this.client.put<IntegrationStatus>(`/auth/admin/integrations/${provider}`, { values });
+  }
+
+  async toggleIntegration(provider: string, enabled: boolean): Promise<IntegrationStatus> {
+    return this.client.patch<IntegrationStatus>(`/auth/admin/integrations/${provider}`, {
+      enabled,
+    });
+  }
+
+  async clearIntegration(provider: string): Promise<IntegrationStatus> {
+    return this.client.delete<IntegrationStatus>(`/auth/admin/integrations/${provider}`);
+  }
+
+  /** Makes a real call to the provider and reports what happened. */
+  async testIntegration(provider: string): Promise<IntegrationTestResult> {
+    return this.client.post<IntegrationTestResult>(
+      `/auth/admin/integrations/${provider}/test`,
+      {},
+    );
   }
 
   async getAccessToken() {

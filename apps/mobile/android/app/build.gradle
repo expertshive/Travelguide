@@ -84,6 +84,20 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // Google Maps API key injected into the manifest. Read from the
+        // git-ignored android/local.properties first (keeps the key out of git),
+        // then a gradle property, else empty so the build still works keyless.
+        def mapsKey = ""
+        def lp = rootProject.file("local.properties")
+        if (lp.exists()) {
+            def props = new Properties()
+            props.load(lp.newDataInputStream())
+            mapsKey = props.getProperty("GOOGLE_MAPS_API_KEY", "")
+        }
+        if (!mapsKey) {
+            mapsKey = (project.findProperty("GOOGLE_MAPS_API_KEY") ?: "")
+        }
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: mapsKey]
     }
     signingConfigs {
         debug {
