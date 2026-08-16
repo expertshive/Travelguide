@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { formatDistance, formatDuration, originFrom } from '../lib/geo';
+import { locateUser } from '../lib/location';
 import {
   calculateRoute,
   listSavedPlaces,
@@ -41,6 +42,7 @@ export function PlaceDetailScreen({ navigation, route: nav }: Props) {
   const destination: LatLng = { latitude: place.latitude, longitude: place.longitude };
 
   const [saved, setSaved] = useState<SavedPlace[]>([]);
+  const [me, setMe] = useState<LatLng | null>(null);
   const [mode, setMode] = useState<TravelMode>('driving');
   const [routes, setRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,13 +52,22 @@ export function PlaceDetailScreen({ navigation, route: nav }: Props) {
     listSavedPlaces()
       .then(setSaved)
       .catch(() => setSaved([]));
+    void locateUser().then((result) => {
+      if (result.ok) setMe(result.position);
+    });
   }, []);
 
   useEffect(() => {
     let active = true;
+    const origin = originFrom(me, saved);
+    if (!origin) {
+      setRoutes([]);
+      setLoading(false);
+      setError('Turn on location to plan a route from where you are.');
+      return;
+    }
     setLoading(true);
     setError(null);
-    const origin = originFrom(saved);
     calculateRoute({ origin, destination, mode, preference: 'fastest' })
       .then((result) => {
         if (active) setRoutes(result);
@@ -68,11 +79,11 @@ export function PlaceDetailScreen({ navigation, route: nav }: Props) {
     return () => {
       active = false;
     };
-    // Re-plan when the mode changes or saved places (origin) resolve.
-  }, [mode, saved, destination.latitude, destination.longitude]);
+    // Re-plan when the mode, GPS, or saved origin changes.
+  }, [mode, saved, me, destination.latitude, destination.longitude]);
 
   const primary = routes[0];
-  const origin = originFrom(saved);
+  const origin = originFrom(me, saved);
 
   const onSave = () => {
     Alert.alert('Save place', `Save "${place.name}" as…`, [
@@ -191,7 +202,22 @@ export function PlaceDetailScreen({ navigation, route: nav }: Props) {
               style={{ flex: 1 }}
               left={<Icon.NavigationIcon color={colors.onPrimary} size={18} />}
               onPress={() =>
-                navigation.navigate('Tabs', { screen: 'Map', params: { destination: place } })
+                navigation.navigate('Tabs', {
+                  screen: 'Map',
+                  params: {
+                    destination: place,
+                    origin: me
+                      ? {
+                          name: 'Your location',
+                          address: 'Current position',
+                          latitude: me.latitude,
+                          longitude: me.longitude,
+                        }
+                      : undefined,
+                    autoStart: true,
+                    tripId: Date.now(),
+                  },
+                })
               }
             />
           </View>
@@ -251,13 +277,13 @@ function RoutePolyline({
   destination,
 }: {
   geometry: LatLng[];
-  origin: LatLng;
+  origin: LatLng | null;
   destination: LatLng;
 }) {
   const [w, setW] = useState(0);
 
   const path = useMemo(() => {
-    const pts = geometry.length >= 2 ? geometry : [origin, destination];
+    const pts = geometry.length >= 2 ? geometry : origin ? [origin, destination] : [destination];
     const lats = pts.map((p) => p.latitude);
     const lngs = pts.map((p) => p.longitude);
     const minLat = Math.min(...lats);

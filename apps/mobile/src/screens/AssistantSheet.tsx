@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAssistant, type AssistantAction, type AssistantContext } from '../lib/assistant';
+import { isAssistantLanguage, spokenCopy, type AssistantLanguage } from '../lib/assistantPrefs';
 import { speak, stopSpeaking } from '../lib/tts';
 import {
   bindVoice,
@@ -39,16 +40,19 @@ function actionLabel(a: AssistantAction): string | null {
 
 export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
   const assistantName = persona?.name || 'Travel Assistant';
-  const locale = persona?.language || 'en-US';
+  const langCode = persona?.language;
+  const locale: AssistantLanguage = isAssistantLanguage(langCode) ? langCode : 'en-US';
+  const copy = spokenCopy(locale);
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: 'assistant',
-      text: `Hi! I'm ${persona?.name || 'your travel co-pilot'}. Ask me about your trip, the weather, or a place to stop.`,
+      text: copy.greeting(assistantName),
     },
   ]);
   const [listening, setListening] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [pending, setPending] = useState<AssistantAction | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
@@ -79,13 +83,48 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
     [context, onAction],
   );
 
-  useEffect(
-    () => () => {
+  const sendRef = useRef(send);
+  sendRef.current = send;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function beginListening() {
+      if (!(await ensureMicPermission())) {
+        if (!cancelled) setMicError('Allow the microphone to talk to the agent.');
+        return;
+      }
+      stopSpeaking();
+      bindVoice({
+        onResult: (text) => {
+          setListening(false);
+          void stopVoice();
+          if (text.trim()) void sendRef.current(text.trim());
+        },
+        onEnd: () => setListening(false),
+        onError: (message) => {
+          setListening(false);
+          setMicError(message);
+        },
+      });
+      try {
+        if (cancelled) return;
+        setListening(true);
+        await startVoice(locale);
+      } catch (error) {
+        if (cancelled) return;
+        setListening(false);
+        setMicError(error instanceof Error ? error.message : 'Could not start the microphone.');
+      }
+    }
+
+    void beginListening();
+    return () => {
+      cancelled = true;
       void destroyVoice();
       stopSpeaking();
-    },
-    [],
-  );
+    };
+  }, [locale]);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
@@ -97,7 +136,11 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
       await stopVoice();
       return;
     }
-    if (!(await ensureMicPermission())) return;
+    setMicError(null);
+    if (!(await ensureMicPermission())) {
+      setMicError('Allow the microphone to talk to the agent.');
+      return;
+    }
     stopSpeaking();
     bindVoice({
       onResult: (text) => {
@@ -106,13 +149,17 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
         if (text.trim()) void send(text.trim());
       },
       onEnd: () => setListening(false),
-      onError: () => setListening(false),
+      onError: (message) => {
+        setListening(false);
+        setMicError(message);
+      },
     });
     try {
       setListening(true);
       await startVoice(locale);
-    } catch {
+    } catch (error) {
       setListening(false);
+      setMicError(error instanceof Error ? error.message : 'Could not start the microphone.');
     }
   }
 
@@ -142,7 +189,7 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
                 {assistantName}
               </Txt>
               <Txt variant="small" color="rgba(255,255,255,0.85)">
-                {listening ? 'Listening…' : thinking ? 'Thinking…' : 'Tap the mic and talk'}
+                {listening ? copy.listening : thinking ? copy.thinking : copy.idleHint}
               </Txt>
             </View>
             <Pressable onPress={onClose} hitSlop={8} style={styles.close}>
@@ -176,14 +223,14 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
           {pending ? (
             <View style={styles.confirm}>
               <Txt variant="small" color={colors.textDim}>
-                Confirm before I change your route
+                {copy.confirmTitle}
               </Txt>
               <Txt variant="bodyStrong" style={{ marginTop: 2 }}>
                 {actionLabel(pending)}
               </Txt>
               <View style={styles.confirmRow}>
                 <Button
-                  title="Not now"
+                  title={copy.confirmNotNow}
                   variant="ghost"
                   size="md"
                   full={false}
@@ -191,7 +238,7 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
                   onPress={() => setPending(null)}
                 />
                 <Button
-                  title="Confirm"
+                  title={copy.confirmOk}
                   size="md"
                   full={false}
                   style={{ flex: 1 }}
@@ -212,8 +259,13 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
             </Gradient>
           </Pressable>
           <Txt variant="small" color={colors.textDim} center style={{ marginTop: spacing.sm }}>
-            {listening ? 'Listening — tap to stop' : 'Tap to talk'}
+            {listening ? copy.listeningStop : copy.tapToTalk}
           </Txt>
+          {micError ? (
+            <Txt variant="small" color={colors.danger} center style={{ marginTop: spacing.sm }}>
+              {micError}
+            </Txt>
+          ) : null}
         </View>
       </View>
       </View>

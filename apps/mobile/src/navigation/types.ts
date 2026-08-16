@@ -20,7 +20,13 @@ export type PlaceParam = {
 
 export type TabParamList = {
   Home: undefined;
-  Map: { query?: string; destination?: PlaceParam } | undefined;
+  Map: {
+    query?: string;
+    destination?: PlaceParam;
+    origin?: PlaceParam;
+    autoStart?: boolean;
+    tripId?: number;
+  } | undefined;
   Saved: undefined;
   Profile: undefined;
 };

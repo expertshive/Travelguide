@@ -35,6 +35,25 @@ const IDENTITY_HEADERS = [
 const CORRELATION_HEADER = 'x-correlation-id';
 
 /**
+ * Node's fetch throws if hop-by-hop / forbidden headers are set (notably
+ * `connection`). PowerShell, browsers, and React Native all send them, which
+ * used to surface as a 502 "Upstream request failed" even when auth was healthy.
+ */
+const SKIP_FORWARD_HEADERS = new Set([
+  'host',
+  'connection',
+  'keep-alive',
+  'content-length',
+  'transfer-encoding',
+  'te',
+  'trailer',
+  'upgrade',
+  'expect',
+  'accept-encoding',
+  'proxy-connection',
+]);
+
+/**
  * Administrative surfaces — the generic table editors each service exposes at
  * `/v1/<segment>/admin/...`. Every service also guards these itself, but gating
  * them here means a new service cannot accidentally publish its database by
@@ -176,8 +195,7 @@ export class ProxyMiddleware implements NestMiddleware {
 
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
-      // content-length is dropped because the forwarded body is re-encoded below.
-      if (value === undefined || key === 'host' || key === 'content-length') continue;
+      if (value === undefined || SKIP_FORWARD_HEADERS.has(key.toLowerCase())) continue;
       if (Array.isArray(value)) {
         value.forEach((v) => headers.append(key, v));
       } else {

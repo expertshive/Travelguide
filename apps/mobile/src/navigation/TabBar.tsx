@@ -1,8 +1,9 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gradient, Txt, colors, radius, shadow, spacing } from '../ui';
+import { Txt, colors, radius, shadow, spacing } from '../ui';
 import { BookmarkIcon, HomeIcon, MapPinIcon, PersonIcon } from '../ui/icons';
+import { useTabBarHidden } from '../lib/tabBarVisibility';
 
 type IconProps = { color?: string; size?: number };
 const ICONS: Record<string, (p: IconProps) => React.ReactElement> = {
@@ -12,9 +13,12 @@ const ICONS: Record<string, (p: IconProps) => React.ReactElement> = {
   Profile: PersonIcon,
 };
 
-/** A floating, rounded tab bar with a gradient pill on the active tab. */
+/** Floating capsule tab bar. The active tab is a nested pill, not a rectangle. */
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const hidden = useTabBarHidden();
+
+  if (hidden) return null;
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
@@ -23,7 +27,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const focused = state.index === index;
           const { options } = descriptors[route.key];
           const label = (options.tabBarLabel as string) ?? route.name;
-          const Icon = ICONS[route.name] ?? HomeIcon;
+          const Glyph = ICONS[route.name] ?? HomeIcon;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -36,22 +40,16 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             }
           };
 
-          if (focused) {
-            return (
-              <Pressable key={route.key} onPress={onPress} style={styles.item}>
-                <Gradient name="brandBright" angle="horizontal" style={styles.pill}>
-                  <Icon color={colors.onPrimary} size={20} />
+          return (
+            <Pressable key={route.key} onPress={onPress} style={styles.item} hitSlop={8}>
+              <View style={focused ? styles.pill : styles.idle}>
+                <Glyph color={focused ? colors.onPrimary : colors.textFaint} size={focused ? 18 : 22} />
+                {focused ? (
                   <Txt variant="small" color={colors.onPrimary} style={styles.pillLabel}>
                     {label}
                   </Txt>
-                </Gradient>
-              </Pressable>
-            );
-          }
-
-          return (
-            <Pressable key={route.key} onPress={onPress} style={styles.item} hitSlop={8}>
-              <Icon color={colors.textFaint} size={22} />
+                ) : null}
+              </View>
             </Pressable>
           );
         })}
@@ -59,6 +57,8 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     </View>
   );
 }
+
+const PILL_H = 44;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -72,26 +72,36 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    height: 56,
+    padding: 6,
     backgroundColor: colors.surface,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
     ...shadow.lifted,
   },
   item: {
     flex: 1,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 48,
+  },
+  idle: {
+    width: PILL_H,
+    height: PILL_H,
+    borderRadius: PILL_H / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
+    height: PILL_H,
+    paddingHorizontal: 16,
+    borderRadius: PILL_H / 2,
+    backgroundColor: colors.primary,
     gap: 6,
   },
   pillLabel: { fontWeight: '700' },

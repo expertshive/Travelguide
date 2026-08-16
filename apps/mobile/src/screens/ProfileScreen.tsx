@@ -2,6 +2,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { loadAssistantPrefs, languageLabel, type AssistantPrefs, DEFAULT_PREFS } from '../lib/assistantPrefs';
 import { PLATFORM_LABELS, getMyProfile, resolveMediaUrl } from '../lib/profile';
 import type { UserProfile } from '../lib/types';
 import type { TabScreenProps } from '../navigation/types';
@@ -23,6 +24,7 @@ type Props = TabScreenProps<'Profile'>;
 export function ProfileScreen({ navigation }: Props) {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [assistant, setAssistant] = useState<AssistantPrefs>(DEFAULT_PREFS);
 
   useFocusEffect(
     useCallback(() => {
@@ -30,6 +32,9 @@ export function ProfileScreen({ navigation }: Props) {
       getMyProfile()
         .then((p) => active && setProfile(p))
         .catch(() => {});
+      void loadAssistantPrefs().then((p) => {
+        if (active) setAssistant(p);
+      });
       return () => {
         active = false;
       };
@@ -157,17 +162,18 @@ export function ProfileScreen({ navigation }: Props) {
           </Section>
         ) : null}
 
-        {/* Assistant */}
-        <Section title="Assistant">
+        {/* Settings */}
+        <Section title="Settings">
           <Pressable onPress={() => navigation.navigate('AssistantSettings')}>
             <Card elevation="soft" style={styles.linkRow}>
               <View style={styles.linkIcon}>
                 <Icon.SparkleIcon color={colors.primary} size={18} />
               </View>
               <View style={{ flex: 1 }}>
-                <Txt variant="bodyStrong">Voice assistant</Txt>
+                <Txt variant="bodyStrong">Voice agent</Txt>
                 <Txt variant="small" color={colors.textDim}>
-                  Choose voice, gender & language
+                  {assistant.name} · {languageLabel(assistant.language)} ·{' '}
+                  {assistant.gender === 'female' ? 'Female' : 'Male'}
                 </Txt>
               </View>
               <Icon.ChevronRightIcon color={colors.textFaint} size={18} />

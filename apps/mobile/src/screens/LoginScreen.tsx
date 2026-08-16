@@ -56,7 +56,7 @@ export function LoginScreen({ navigation }: Props) {
   }
 
   return (
-    <AuthLayout title="Sign in" subtitle="Welcome back. Let's get you travelling.">
+    <AuthLayout title="Sign in" subtitle="Welcome back — the road is waiting.">
       {error ? <Banner tone="danger" message={error} /> : null}
 
       <Field

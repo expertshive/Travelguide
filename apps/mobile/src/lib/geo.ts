@@ -1,12 +1,5 @@
 import type { LatLng, SavedPlace } from './map';
 
-/**
- * A sensible default "here" for the demo: central Riyadh. The app has no native
- * geolocation module wired yet, so searches bias around this point and route
- * previews use the traveller's saved Home when available, falling back here.
- */
-export const DEFAULT_LOCATION: LatLng = { latitude: 24.7136, longitude: 46.6753 };
-
 /** Human distance: metres under 1 km, otherwise km with one decimal. */
 export function formatDistance(meters: number): string {
   if (!Number.isFinite(meters)) return '—';
@@ -25,13 +18,28 @@ export function formatDuration(seconds: number): string {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
-/** The origin to plan a route from: saved Home if present, else the default. */
-export function originFrom(savedPlaces: SavedPlace[]): LatLng {
-  const home = savedPlaces.find((p) => p.label === 'HOME');
-  if (home) return { latitude: home.latitude, longitude: home.longitude };
-  return DEFAULT_LOCATION;
+/**
+ * Route origin is GPS only. Never a default city (Riyadh) or a saved Home pin.
+ */
+export function originFrom(me: LatLng | null, _savedPlaces?: SavedPlace[]): LatLng | null {
+  return me;
 }
 
 export function savedPlaceToLatLng(place: SavedPlace): LatLng {
   return { latitude: place.latitude, longitude: place.longitude };
+}
+
+/** Camera delta that frames a circle of `meters` around a point. */
+export function regionForRadius(
+  center: LatLng,
+  meters: number,
+): { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } {
+  const latDelta = Math.max((meters / 111_000) * 2.6, 0.012);
+  const cos = Math.max(Math.cos((center.latitude * Math.PI) / 180), 0.25);
+  return {
+    latitude: center.latitude,
+    longitude: center.longitude,
+    latitudeDelta: latDelta,
+    longitudeDelta: latDelta / cos,
+  };
 }

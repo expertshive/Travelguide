@@ -164,6 +164,15 @@ export function RouteIcon(props: IconProps) {
   );
 }
 
+export function SwapIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <Path d="M7 8h11M15 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M17 16H6M9 20l-4-4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </IconFrame>
+  );
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <IconFrame {...props}>

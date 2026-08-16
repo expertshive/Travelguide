@@ -35,14 +35,21 @@ function bundleHost(): string | null {
   return match?.[1] ?? null;
 }
 
+function isAndroidEmulator(): boolean {
+  const fingerprint = String(
+    (Platform as { constants?: { Fingerprint?: string } }).constants?.Fingerprint ?? '',
+  );
+  return /generic|emulator|sdk_gphone|ranchu/i.test(fingerprint);
+}
+
 function resolveApiBase(): string {
-  // The Android emulator reaches its host only through this alias.
+  const host = bundleHost();
   if (Platform.OS === 'android') {
-    const host = bundleHost();
-    const usable = host && host !== 'localhost' && host !== '127.0.0.1' ? host : '10.0.2.2';
-    return `http://${usable}:${API_PORT}/v1`;
+    // Emulator: 10.0.2.2 is the host loopback. Physical USB: adb reverse only
+    // forwards IPv4 127.0.0.1, not localhost (::1) and not the LAN address.
+    return `http://${isAndroidEmulator() ? '10.0.2.2' : '127.0.0.1'}:${API_PORT}/v1`;
   }
-  return `http://${bundleHost() ?? FALLBACK_DEV_HOST}:${API_PORT}/v1`;
+  return `http://${host ?? FALLBACK_DEV_HOST}:${API_PORT}/v1`;
 }
 
 const API_BASE = resolveApiBase();
@@ -74,12 +81,21 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`Could not reach the server at ${API_BASE}. Is it running?`);
     }
-    throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not reach the server at ${API_BASE}. ${detail}`);
   } finally {
     clearTimeout(timer);
   }
 
-  const payload = (await response.json()) as ApiResponse<T>;
+  const raw = await response.text();
+  let payload: ApiResponse<T>;
+  try {
+    payload = JSON.parse(raw) as ApiResponse<T>;
+  } catch {
+    throw new Error(
+      raw.trim() || `Server at ${API_BASE} returned ${response.status} ${response.statusText}`,
+    );
+  }
 
   if (!response.ok || !payload.success) {
     throw new Error(payload.error?.message ?? response.statusText);

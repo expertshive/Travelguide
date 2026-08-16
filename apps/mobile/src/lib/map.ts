@@ -100,6 +100,7 @@ export type RouteRequestInput = {
   preference?: RoutePreference;
   avoid?: RouteAvoid;
   alternatives?: boolean;
+  language?: string;
 };
 
 /* -------------------------------------------------------------------------- */

@@ -46,6 +46,21 @@ function greeting() {
   return 'Good evening';
 }
 
+function openOnMap(
+  navigation: Props['navigation'],
+  item: { id?: string; name: string; address: string; latitude: number; longitude: number },
+) {
+  navigation.navigate('Map', {
+    destination: {
+      id: item.id,
+      name: item.name,
+      address: item.address,
+      latitude: item.latitude,
+      longitude: item.longitude,
+    },
+  });
+}
+
 export function HomeScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [saved, setSaved] = useState<SavedPlace[]>([]);
@@ -73,11 +88,14 @@ export function HomeScreen({ navigation }: Props) {
   );
 
   const firstName = (user?.name ?? '').split(' ')[0] || 'Traveler';
-  const hasHome = saved.some((s) => s.label === 'HOME');
 
   return (
     <View style={styles.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         <Gradient name="brand" style={styles.header}>
           {/* Decorative blobs for depth */}
           <View style={styles.blobOne} pointerEvents="none" />
@@ -91,6 +109,9 @@ export function HomeScreen({ navigation }: Props) {
               <Txt variant="h2" color={colors.onPrimary} style={{ marginTop: 2 }}>
                 {firstName}
               </Txt>
+              <Txt variant="small" color="rgba(255,255,255,0.78)" style={{ marginTop: 4 }}>
+                Let’s plan a stop along the way
+              </Txt>
             </View>
             <IconButton bg="rgba(255,255,255,0.16)" onPress={() => {}}>
               <Icon.BellIcon color={colors.onPrimary} size={20} />
@@ -103,14 +124,17 @@ export function HomeScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
-          <Pressable style={styles.search} onPress={() => navigation.navigate('Map', {})}>
-            <Icon.SearchIcon color={colors.textDim} size={20} />
-            <Txt variant="body" color={colors.textDim} style={{ flex: 1 }}>
-              Where do you want to go?
-            </Txt>
-            <Gradient name="candy" angle="diagonal" style={styles.searchBtn}>
-              <Icon.NavigationIcon color={colors.onPrimary} size={18} />
-            </Gradient>
+          <Pressable style={styles.planCard} onPress={() => navigation.navigate('Map', {})}>
+            <View style={styles.planIcon}>
+              <Icon.NavigationIcon color={colors.primary} size={20} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodyStrong">Plan a trip</Txt>
+              <Txt variant="small" color={colors.textDim}>
+                Set start, add stops, and pick a destination on the map
+              </Txt>
+            </View>
+            <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
           </Pressable>
         </Gradient>
 
@@ -192,14 +216,12 @@ export function HomeScreen({ navigation }: Props) {
                     key={place.id}
                     style={styles.savedCard}
                     onPress={() =>
-                      navigation.navigate('PlaceDetail', {
-                        place: {
-                          id: place.id,
-                          name: place.name,
-                          address: place.address,
-                          latitude: place.latitude,
-                          longitude: place.longitude,
-                        },
+                      openOnMap(navigation, {
+                        id: place.id,
+                        name: place.name,
+                        address: place.address,
+                        latitude: place.latitude,
+                        longitude: place.longitude,
                       })
                     }
                   >
@@ -252,13 +274,11 @@ export function HomeScreen({ navigation }: Props) {
                   key={r.id}
                   style={[styles.recentRow, i > 0 && styles.recentBorderTop]}
                   onPress={() =>
-                    navigation.navigate('PlaceDetail', {
-                      place: {
-                        name: r.name,
-                        address: r.address,
-                        latitude: r.latitude,
-                        longitude: r.longitude,
-                      },
+                    openOnMap(navigation, {
+                      name: r.name,
+                      address: r.address,
+                      latitude: r.latitude,
+                      longitude: r.longitude,
                     })
                   }
                 >
@@ -286,11 +306,9 @@ export function HomeScreen({ navigation }: Props) {
               <Icon.NavigationIcon color={colors.teal} size={20} />
             </View>
             <View style={{ flex: 1 }}>
-              <Txt variant="bodyStrong">Routes start from your Home</Txt>
+              <Txt variant="bodyStrong">Start, stops, and destination live on the map</Txt>
               <Txt variant="small" color={colors.textDim}>
-                {hasHome
-                  ? 'Tap any place to preview the drive.'
-                  : 'Save a Home place to plan smarter routes.'}
+                Open Map, allow location, then add stops before you start the trip.
               </Txt>
             </View>
           </Card>
@@ -331,22 +349,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   headerTop: { flexDirection: 'row', alignItems: 'center' },
-  search: {
+  planCard: {
     marginTop: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.sm,
-    paddingVertical: spacing.sm,
-    ...shadow.soft,
+    gap: spacing.md,
+    ...shadow.card,
   },
-  searchBtn: {
+  planIcon: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: 20,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

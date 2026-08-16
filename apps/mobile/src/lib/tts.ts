@@ -11,15 +11,22 @@ let ready: boolean | null = null;
 let currentVoice: string | null = null;
 let currentLanguage: AssistantLanguage = 'en-US';
 let currentGender: AssistantGender = 'female';
-// Set true once the server reports no ElevenLabs key, so we stop calling it.
-let elevenDisabled = false;
+/** Consecutive ElevenLabs misses. Reset on success; retry after a cooldown. */
+let elevenMisses = 0;
+let elevenSkipUntil = 0;
+let speakChain: Promise<void> = Promise.resolve();
 
 async function ensureReady(): Promise<boolean> {
   if (ready !== null) return ready;
   try {
     await Tts.getInitStatus();
-    Tts.setDefaultRate(0.5);
+    Tts.setDefaultRate(0.48);
     Tts.setDefaultPitch(1.0);
+    try {
+      await Tts.setIgnoreSilentSwitch('ignore');
+    } catch {
+      /* Android */
+    }
     ready = true;
   } catch {
     ready = false;
@@ -29,7 +36,7 @@ async function ensureReady(): Promise<boolean> {
 
 type Voice = { id: string; name?: string; language?: string; notInstalled?: boolean };
 
-/** Choose a device voice matching the gender + language. */
+/** Choose a device voice matching the gender + language (last-resort fallback). */
 async function pickVoice(gender: AssistantGender, language: AssistantLanguage): Promise<string | null> {
   try {
     const voices = (await Tts.voices()) as Voice[];
@@ -55,33 +62,12 @@ export async function setAssistantVoice(
   gender: AssistantGender,
   language: AssistantLanguage,
 ): Promise<void> {
-  await ensureReady();
   currentGender = gender;
   currentLanguage = language;
   currentVoice = await pickVoice(gender, language);
 }
 
-/**
- * Speak text aloud. Prefers ElevenLabs (natural voice, via the ai-service) and
- * falls back to the device voice if ElevenLabs isn't configured or fails.
- */
-export async function speak(text: string): Promise<void> {
-  if (!text) return;
-  stopAudio();
-
-  if (!elevenDisabled) {
-    try {
-      const audio = await synthesizeSpeech(text, currentGender);
-      if (audio) {
-        await playBase64Mp3(audio);
-        return;
-      }
-      elevenDisabled = true; // server has no ElevenLabs key — use the device voice
-    } catch {
-      /* network/auth issue — fall back to device voice for this utterance */
-    }
-  }
-
+async function speakDevice(text: string): Promise<void> {
   if (!(await ensureReady())) return;
   try {
     Tts.stop();
@@ -105,6 +91,43 @@ export async function speak(text: string): Promise<void> {
   }
 }
 
+async function speakNow(text: string): Promise<void> {
+  if (!text) return;
+  stopAudio();
+
+  const useEleven = Date.now() >= elevenSkipUntil;
+  if (useEleven) {
+    try {
+      const audio = await synthesizeSpeech(text, currentGender, currentLanguage);
+      if (audio) {
+        elevenMisses = 0;
+        await playBase64Mp3(audio);
+        return;
+      }
+    } catch {
+      /* network — try again next utterance */
+    }
+    elevenMisses += 1;
+    if (elevenMisses >= 3) {
+      elevenSkipUntil = Date.now() + 60_000;
+      elevenMisses = 0;
+    }
+  }
+
+  await speakDevice(text);
+}
+
+/**
+ * Speak with ElevenLabs (turn-by-turn and assistant replies).
+ * Utterances are queued so a new instruction does not cut off the last one.
+ * Falls back to the device voice only if ElevenLabs is unreachable.
+ */
+export async function speak(text: string): Promise<void> {
+  const job = speakChain.then(() => speakNow(text));
+  speakChain = job.catch(() => {});
+  await job;
+}
+
 /** Set the voice then speak a short sample — used by the settings preview. */
 export async function previewVoice(
   gender: AssistantGender,
@@ -112,10 +135,11 @@ export async function previewVoice(
   sample: string,
 ): Promise<void> {
   await setAssistantVoice(gender, language);
-  void speak(sample);
+  await speak(sample);
 }
 
 export function stopSpeaking(): void {
+  speakChain = Promise.resolve();
   stopAudio();
   try {
     Tts.stop();

@@ -33,6 +33,7 @@ type Context = {
   stops?: string[];
   distanceMeters?: number;
   durationSeconds?: number;
+  radiusMeters?: number;
   assistant?: { name?: string; gender?: string; language?: string };
 };
 
@@ -54,6 +55,28 @@ const WMO: Record<number, string> = {
 };
 
 const ROUTE_ACTIONS = new Set(['add_stop', 'remove_stop', 'set_route_style', 'start_navigation']);
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  'en-US': 'English',
+  'ar-SA': 'Arabic',
+  'ur-PK': 'Urdu',
+  'hi-IN': 'Hindi',
+  'fr-FR': 'French',
+  'es-ES': 'Spanish',
+  'tr-TR': 'Turkish',
+  en: 'English',
+  ar: 'Arabic',
+  ur: 'Urdu',
+  hi: 'Hindi',
+  fr: 'French',
+  es: 'Spanish',
+  tr: 'Turkish',
+};
+
+function languageDisplayName(code?: string): string {
+  if (!code) return 'English';
+  return LANGUAGE_NAMES[code] ?? LANGUAGE_NAMES[code.split('-')[0] ?? ''] ?? 'English';
+}
 
 @Injectable()
 export class AssistantService {
@@ -132,20 +155,31 @@ export class AssistantService {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
     const persona = context.assistant;
+    const radiusM =
+      typeof context.radiusMeters === 'number' && context.radiusMeters > 0
+        ? context.radiusMeters
+        : null;
+    const radiusKm = radiusM ? (radiusM / 1000).toFixed(radiusM < 1000 ? 2 : 1) : null;
+    const radiusRule = radiusM
+      ? `HARD LIMIT: only mention, describe, or suggest places within ${radiusM} meters (${radiusKm} km) of the traveler's current position. If they ask about something farther, say you can only talk about places inside their chosen search radius. Never recommend a stop outside that radius.`
+      : 'Stay focused on places near the traveler.';
+    const langName = languageDisplayName(persona?.language);
     const personaLine = persona?.name
-      ? `Your name is ${persona.name}${persona.gender ? `, a ${persona.gender} co-pilot` : ''}.${persona.language === 'ar-SA' ? ' Reply in Arabic.' : ''}`
+      ? `Your name is ${persona.name}${persona.gender ? `, a ${persona.gender} co-pilot` : ''}.`
       : '';
 
     const system = [
       personaLine,
+      `Always reply in ${langName}. The traveler chose this language in agent settings. The JSON field names stay in English; only the "reply" text is in ${langName}. Action query values stay in English so the map can search.`,
       'You are the Traveler Guide voice co-pilot: a warm, natural, concise in-car travel assistant that talks like a friendly human.',
       'Speak in short spoken sentences — no markdown, no lists. Sound like a helpful co-pilot riding along.',
       'You can: chat about the destination and nearby places, describe a place briefly, report the weather, find things along the way, and change stops or the route — but only with the user\'s confirmation.',
+      radiusRule,
       'When the traveller asks to find something on the way or nearby (e.g. "find me the nearest restaurant", "any coffee ahead?", "I need fuel"), use the "add_stop" action with query set to that place type, and in your reply say you found one and ASK if they want to stop there.',
       'When they ask what a place is like, or about history/food/etc., answer briefly and warmly with action "none".',
       'IMPORTANT: never say a route change has happened. Propose it and set the action; the app asks the user to confirm before the route actually changes.',
       'Pick exactly one action: "search" (query = what to show on the map), "add_stop" (query = the place type/name to add as a stop and reroute), "remove_stop", "set_route_style" (routeStyle = fastest|shortest|scenic|historical|adventure|food|family|religious|budget), "start_navigation", or "none" for pure conversation.',
-      'Keep "reply" to 1-2 natural sentences suitable for text-to-speech, and end route suggestions with a question like "Want me to add it?"',
+      'Keep "reply" to 1-2 natural sentences in the chosen language, suitable for text-to-speech. End route suggestions with a short confirmation question in that language.',
     ].join(' ');
 
     const ctxLines: string[] = [];
@@ -159,6 +193,11 @@ export class AssistantService {
     }
     if (typeof context.durationSeconds === 'number') {
       ctxLines.push(`Duration: ${Math.round(context.durationSeconds / 60)} min`);
+    }
+    if (typeof context.radiusMeters === 'number') {
+      ctxLines.push(
+        `Search radius: ${context.radiusMeters} m around the traveler. Do not talk about places outside this circle.`,
+      );
     }
     if (weather) ctxLines.push(`Destination weather: ${weather.summary}, ${weather.temperatureC}°C`);
 

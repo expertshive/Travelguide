@@ -417,8 +417,24 @@ const styles = StyleSheet.create({
   },
   cardPad: { padding: spacing.lg },
 
-  btn: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
-  btnInner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  btn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  btnInner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
 
   iconBtn: { alignItems: 'center', justifyContent: 'center' },
 

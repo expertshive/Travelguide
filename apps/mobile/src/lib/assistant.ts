@@ -21,6 +21,8 @@ export type AssistantContext = {
   stops?: string[];
   distanceMeters?: number;
   durationSeconds?: number;
+  /** How far from the traveler the agent may discuss / suggest places. */
+  radiusMeters?: number;
   /** The assistant persona chosen by the user (name / gender / language). */
   assistant?: { name?: string; gender?: string; language?: string };
 };
@@ -40,10 +42,11 @@ export function askAssistant(
 export async function synthesizeSpeech(
   text: string,
   gender: 'male' | 'female',
+  language?: string,
 ): Promise<string | null> {
   const res = await authorizedRequest<{ audio: string | null }>('/ai/tts', {
     method: 'POST',
-    body: JSON.stringify({ text, gender }),
+    body: JSON.stringify({ text, gender, language }),
   });
   return res.audio ?? null;
 }

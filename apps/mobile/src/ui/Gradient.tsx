@@ -39,9 +39,14 @@ export function Gradient({
         : { x1: '0', y1: '0', x2: '1', y2: '1' };
 
   return (
-    <View {...rest} style={style} onLayout={onLayout}>
+    <View {...rest} style={[{ overflow: 'hidden' }, style]} onLayout={onLayout}>
       {size.width > 0 ? (
-        <Svg style={StyleSheet.absoluteFill} width={size.width} height={size.height}>
+        <Svg
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+          width={size.width}
+          height={size.height}
+        >
           <Defs>
             <LinearGradient id="g" {...dir}>
               <Stop offset="0" stopColor={from} />

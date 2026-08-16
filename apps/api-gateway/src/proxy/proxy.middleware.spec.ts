@@ -174,6 +174,32 @@ describe('ProxyMiddleware', () => {
       expect(fetchMock.mock.calls[0][0]).toBe('http://auth:4001/v1/auth/login');
     });
 
+    it('does not forward hop-by-hop headers that break Node fetch', async () => {
+      middleware.use(
+        buildRequest({
+          originalUrl: '/v1/auth/login',
+          method: 'POST',
+          headers: {
+            connection: 'keep-alive',
+            'keep-alive': 'timeout=5',
+            'transfer-encoding': 'chunked',
+            host: '127.0.0.1:4000',
+            'content-type': 'application/json',
+          },
+        }),
+        buildResponse(),
+        jest.fn(),
+      );
+      await flush();
+
+      const headers = forwardedHeaders();
+      expect(headers.has('connection')).toBe(false);
+      expect(headers.has('keep-alive')).toBe(false);
+      expect(headers.has('transfer-encoding')).toBe(false);
+      expect(headers.has('host')).toBe(false);
+      expect(headers.get('content-type')).toBe('application/json');
+    });
+
     it('still protects non-public auth endpoints', () => {
       const res = buildResponse();
       middleware.use(buildRequest({ originalUrl: '/v1/auth/me' }), res, jest.fn());

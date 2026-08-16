@@ -4,3 +4,14 @@ extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autoli
 rootProject.name = 'TravelerGuideMobile'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
+
+// Gradle 9 removed RepositoryHandler.jcenter(). Some autolinked libraries still call it.
+gradle.beforeProject { project ->
+    def aliasJCenter = { repos ->
+        repos.metaClass.jcenter = { Object[] args ->
+            repos.mavenCentral()
+        }
+    }
+    aliasJCenter(project.buildscript.repositories)
+    aliasJCenter(project.repositories)
+}

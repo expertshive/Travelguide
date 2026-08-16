@@ -19,6 +19,14 @@ class TtsRequestDto {
   @IsOptional()
   @IsString()
   voiceId?: string;
+
+  @ApiPropertyOptional({
+    description: 'BCP-47 or ISO 639-1 code (e.g. ur-PK, hi-IN) so pronunciation matches the agent language.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  language?: string;
 }
 
 @ApiTags('assistant')
@@ -29,6 +37,6 @@ export class TtsController {
   @Post()
   @ApiOperation({ summary: 'Synthesize speech (ElevenLabs). Returns base64 audio or null.' })
   speak(@Body() dto: TtsRequestDto) {
-    return this.tts.synthesize(dto.text, dto.gender ?? 'female', dto.voiceId);
+    return this.tts.synthesize(dto.text, dto.gender ?? 'female', dto.voiceId, dto.language);
   }
 }

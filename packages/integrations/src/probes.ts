@@ -119,17 +119,12 @@ async function probeElevenLabs(values: ProbeValues): Promise<ProbeOutcome> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+    const response = await fetch('https://api.elevenlabs.io/v1/user', {
       headers: { 'xi-api-key': key },
       signal: controller.signal,
     });
     if (response.ok) {
-      const body = (await response.json().catch(() => null)) as { voices?: unknown[] } | null;
-      const count = Array.isArray(body?.voices) ? body!.voices!.length : undefined;
-      return {
-        ok: true,
-        message: count === undefined ? 'Key is valid.' : `Key is valid. ${count} voices available.`,
-      };
+      return { ok: true, message: 'ElevenLabs key is valid.' };
     }
     if (response.status === 401) return { ok: false, message: 'ElevenLabs rejected the key (401).' };
     if (response.status === 429) return { ok: false, message: 'ElevenLabs rate limit reached (429).' };

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import {
+  ASSISTANT_LANGUAGES,
   DEFAULT_NAME,
   loadAssistantPrefs,
   saveAssistantPrefs,
+  spokenCopy,
   type AssistantGender,
   type AssistantLanguage,
 } from '../lib/assistantPrefs';
@@ -25,11 +27,6 @@ import {
 
 type Props = AppScreenProps<'AssistantSettings'>;
 
-const SAMPLE: Record<AssistantLanguage, (name: string) => string> = {
-  'en-US': (name) => `Hi, I'm ${name}, your travel co-pilot. Where would you like to go?`,
-  'ar-SA': (name) => `مرحباً، أنا ${name}، مساعدك في الرحلة. إلى أين تود الذهاب؟`,
-};
-
 export function AssistantSettingsScreen({ navigation }: Props) {
   const [gender, setGender] = useState<AssistantGender>('female');
   const [name, setName] = useState(DEFAULT_NAME.female);
@@ -46,7 +43,6 @@ export function AssistantSettingsScreen({ navigation }: Props) {
 
   function chooseGender(g: AssistantGender) {
     setGender(g);
-    // Swap to the default name when the user hasn't set a custom one.
     if (name === DEFAULT_NAME.female || name === DEFAULT_NAME.male || !name.trim()) {
       setName(DEFAULT_NAME[g]);
     }
@@ -61,20 +57,27 @@ export function AssistantSettingsScreen({ navigation }: Props) {
     navigation.goBack();
   }
 
+  const sample = spokenCopy(language).preview(name.trim() || DEFAULT_NAME[gender]);
+
   return (
     <Screen>
       <View style={styles.header}>
         <IconButton onPress={() => navigation.goBack()}>
           <Icon.BackIcon color={colors.text} size={20} />
         </IconButton>
-        <Txt variant="title">Voice Assistant</Txt>
+        <Txt variant="title">Agent settings</Txt>
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.body}>
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+      >
         <Txt variant="body" color={colors.textDim} style={{ marginBottom: spacing.lg }}>
-          Choose how your co-pilot sounds. It speaks with the phone's voice now, and upgrades to a
-          natural ElevenLabs voice once a key is added.
+          Change the voice agent language, name, and gender. The mic, spoken replies, and trip
+          guidance all follow this language after you save.
         </Txt>
 
         <Txt variant="small" color={colors.textDim} style={styles.label}>
@@ -121,41 +124,47 @@ export function AssistantSettingsScreen({ navigation }: Props) {
         />
 
         <Txt variant="small" color={colors.textDim} style={styles.label}>
-          Language
+          Agent language
+        </Txt>
+        <Txt variant="caption" color={colors.textFaint} style={{ marginBottom: spacing.sm }}>
+          Listening, replies, and turn-by-turn speech use this language.
         </Txt>
         <View style={styles.langRow}>
-          {(
-            [
-              ['en-US', 'English'],
-              ['ar-SA', 'العربية'],
-            ] as [AssistantLanguage, string][]
-          ).map(([code, labelText]) => (
-            <Pressable
-              key={code}
-              style={[styles.langChip, language === code && styles.langChipOn]}
-              onPress={() => setLanguage(code)}
-            >
-              <Txt variant="bodyStrong" color={language === code ? colors.onPrimary : colors.text}>
-                {labelText}
-              </Txt>
-            </Pressable>
-          ))}
+          {ASSISTANT_LANGUAGES.map(({ code, label, native }) => {
+            const on = language === code;
+            return (
+              <Pressable
+                key={code}
+                style={[styles.langChip, on && styles.langChipOn]}
+                onPress={() => setLanguage(code)}
+              >
+                <Txt variant="bodyStrong" color={on ? colors.onPrimary : colors.text}>
+                  {native}
+                </Txt>
+                {native !== label ? (
+                  <Txt variant="caption" color={on ? 'rgba(255,255,255,0.85)' : colors.textDim}>
+                    {label}
+                  </Txt>
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
 
         <Button
           title="Preview voice"
           variant="secondary"
           left={<Icon.MicIcon color={colors.primarySoftText} size={18} />}
-          onPress={() => void previewVoice(gender, language, SAMPLE[language](name.trim() || DEFAULT_NAME[gender]))}
+          onPress={() => void previewVoice(gender, language, sample)}
           style={{ marginTop: spacing.sm }}
         />
         <Button
-          title={saving ? 'Saving…' : 'Save assistant'}
+          title={saving ? 'Saving…' : 'Save agent settings'}
           loading={saving}
           onPress={() => void save()}
           style={{ marginTop: spacing.md }}
         />
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -168,8 +177,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
-  body: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-  label: { marginBottom: spacing.sm, marginLeft: 2 },
+  body: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.xxxl },
+  label: { marginBottom: spacing.sm, marginLeft: 2, marginTop: spacing.md },
 
   genderRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
   genderCard: {
@@ -191,11 +200,13 @@ const styles = StyleSheet.create({
   },
   genderIconIdle: { backgroundColor: colors.surfaceAlt },
 
-  langRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm },
+  langRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   langChip: {
-    flex: 1,
+    minWidth: '30%',
+    flexGrow: 1,
     alignItems: 'center',
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
   },
