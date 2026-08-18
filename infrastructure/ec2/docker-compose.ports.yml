@@ -1,0 +1,13 @@
+# Bind data stores to loopback so they are not reachable from the internet
+# even if a security group rule is too open.
+services:
+  mysql:
+    ports:
+      - '127.0.0.1:3306:3306'
+  redis:
+    ports:
+      - '127.0.0.1:6379:6379'
+  rabbitmq:
+    ports:
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:15672:15672'

@@ -16,6 +16,13 @@
  */
 export const GOOGLE_MAPS_ENABLED = true;
 
+/**
+ * Public API origin including `/v1` (no trailing slash). When set, the phone
+ * uses this instead of the Mac LAN IP so you can test from anywhere.
+ * Example: 'https://54-1-2-3.sslip.io/v1'
+ */
+export const API_PUBLIC_BASE = '';
+
 /** Raster tiles used on Android when GOOGLE_MAPS_ENABLED is false. */
 export const OSM_STREET_TILES =
   'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png';

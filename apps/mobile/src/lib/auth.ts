@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import { API_PUBLIC_BASE } from '../config';
 import { DEV_MACHINE_HOST } from './devMachineHost';
 import {
   clearTokens,
@@ -44,6 +45,7 @@ function resolveApiHost(): string {
 }
 
 function resolveApiBase(): string {
+  if (API_PUBLIC_BASE) return API_PUBLIC_BASE.replace(/\/$/, '');
   return `http://${resolveApiHost()}:${API_PORT}/v1`;
 }
 
