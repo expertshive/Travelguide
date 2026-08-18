@@ -35,29 +35,17 @@ function speechErrorMessage(raw?: string): string {
   return raw?.trim() || 'Could not hear you';
 }
 
-/**
- * Google's on-device recognizer often lacks `ur-PK`. Try the locales it
- * actually ships (ur-IN, then Hindi) so the mic does not immediately fail.
- */
-function localeFallbacks(locale: string): string[] {
-  const chain: string[] = [];
-  const push = (value: string) => {
-    if (value && !chain.includes(value)) chain.push(value);
-  };
+function recognitionLocale(locale: string): string {
+  if (locale === 'ur-PK' || locale.startsWith('ur')) return 'ur-IN';
+  if (locale.startsWith('hi')) return 'hi-IN';
+  return locale;
+}
 
-  if (locale === 'ur-PK' || locale.startsWith('ur')) {
-    push('ur-IN');
-    push('ur');
-    push('hi-IN');
-    push(locale);
-  } else if (locale === 'hi-IN' || locale.startsWith('hi')) {
-    push('hi-IN');
-    push('hi');
-    push(locale);
-  } else {
-    push(locale);
-  }
-  return chain;
+let startLock = false;
+let speechCooldownUntil = 0;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Wire up the voice recognition callbacks. Call once before starting. */
@@ -67,7 +55,11 @@ export function bindVoice(handlers: VoiceHandlers): void {
     if (text) handlers.onResult(text);
   };
   Voice.onSpeechError = (e: SpeechErrorEvent) => {
-    handlers.onError?.(speechErrorMessage(e.error?.message));
+    const raw = e.error?.message ?? '';
+    if (raw.startsWith('10') || raw.includes('10/')) {
+      speechCooldownUntil = Date.now() + 8000;
+    }
+    handlers.onError?.(speechErrorMessage(raw));
   };
   Voice.onSpeechEnd = () => handlers.onEnd?.();
 }
@@ -80,7 +72,7 @@ export async function ensureMicPermission(): Promise<boolean> {
     if (already) return true;
     const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
       title: 'Microphone',
-      message: 'Traveler Guide uses the mic so you can search and talk to the assistant.',
+      message: 'Traveler Guide uses the mic so you can search and talk to the agent.',
       buttonPositive: 'Allow',
       buttonNegative: 'Deny',
     });
@@ -90,51 +82,40 @@ export async function ensureMicPermission(): Promise<boolean> {
   }
 }
 
+/**
+ * Start a single recognition session. Do not stop/cancel/retry around this —
+ * each extra native call counts toward Google's ERROR_TOO_MANY_REQUESTS (10).
+ */
 export async function startVoice(locale = 'en-US'): Promise<void> {
-  try {
-    await Voice.stop();
-    await Voice.cancel();
-  } catch {
-    /* nothing running */
+  if (startLock) return;
+  if (Date.now() < speechCooldownUntil) {
+    throw new Error(ANDROID_SPEECH_ERRORS['10']);
   }
 
+  startLock = true;
   try {
-    const available = await Voice.isAvailable();
-    if (!available) {
-      throw new Error(
-        'Speech recognition is not available. Install Google Speech Services and try again.',
-      );
-    }
+    await Voice.start(recognitionLocale(locale), {
+      EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
+      EXTRA_PARTIAL_RESULTS: false,
+      EXTRA_PREFER_OFFLINE: true,
+      REQUEST_PERMISSIONS_AUTO: true,
+      EXTRA_MAX_RESULTS: 1,
+    });
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Speech recognition')) {
-      throw error;
+    const raw = error instanceof Error ? error.message : String(error);
+    if (raw.startsWith('10') || raw.includes('too many')) {
+      speechCooldownUntil = Date.now() + 8000;
+      throw new Error(ANDROID_SPEECH_ERRORS['10']);
     }
-    /* isAvailable can throw on a cold start — still attempt start() */
+    throw new Error(speechErrorMessage(raw));
+  } finally {
+    startLock = false;
   }
-
-  let lastError: unknown;
-  for (const candidate of localeFallbacks(locale)) {
-    try {
-      await Voice.start(candidate, {
-        RECOGNIZER_ENGINE: 'GOOGLE',
-        EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
-        EXTRA_PARTIAL_RESULTS: true,
-        REQUEST_PERMISSIONS_AUTO: true,
-      });
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw new Error(
-    speechErrorMessage(lastError instanceof Error ? lastError.message : String(lastError ?? '')),
-  );
 }
 
 export async function stopVoice(): Promise<void> {
   try {
-    await Voice.stop();
+    await Voice.cancel();
   } catch {
     /* already stopped */
   }
@@ -150,11 +131,6 @@ export async function destroyVoice(): Promise<void> {
   } catch {
     /* already stopped */
   }
-  try {
-    await Voice.stop();
-  } catch {
-    /* already stopped */
-  }
   Voice.removeAllListeners();
 }
 
@@ -165,3 +141,5 @@ export async function isVoiceAvailable(): Promise<boolean> {
     return false;
   }
 }
+
+export { delay };

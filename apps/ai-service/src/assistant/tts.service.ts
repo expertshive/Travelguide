@@ -34,6 +34,9 @@ function needsIndicModel(lang?: string): boolean {
   return lang === 'ur' || lang === 'hi';
 }
 
+const DEFAULT_MODEL = 'eleven_v3';
+const LEGACY_MODEL = 'eleven_multilingual_v2';
+
 /** language_code is ignored by multilingual_v2, which is why Urdu/Hindi sounded garbled. */
 function modelsToTry(lang: string | undefined, configured?: string): string[] {
   const models: string[] = [];
@@ -41,16 +44,19 @@ function modelsToTry(lang: string | undefined, configured?: string): string[] {
     if (id && !models.includes(id)) models.push(id);
   };
 
+  const preferred =
+    configured && configured !== LEGACY_MODEL ? configured : DEFAULT_MODEL;
+
   if (needsIndicModel(lang)) {
-    push('eleven_v3');
+    push(preferred);
+    push(DEFAULT_MODEL);
     push('eleven_flash_v2_5');
     return models;
   }
 
-  if (configured && configured !== 'eleven_multilingual_v2') push(configured);
-  if (lang) push('eleven_flash_v2_5');
-  else push(configured || 'eleven_flash_v2_5');
-  push('eleven_v3');
+  push(preferred);
+  push(DEFAULT_MODEL);
+  push('eleven_flash_v2_5');
   return models;
 }
 
@@ -129,7 +135,7 @@ export class TtsService {
       },
     };
     // Not supported on multilingual_v2; required for Hindi/Urdu on v3 / flash.
-    if (lang && model !== 'eleven_multilingual_v2') {
+    if (lang && model !== LEGACY_MODEL) {
       body.language_code = lang;
     }
 

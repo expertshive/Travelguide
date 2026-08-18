@@ -24,8 +24,8 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
 
-  const port = process.env.PORT ?? 4013;
-  await app.listen(port);
+  const port = Number(process.env.PORT ?? 4013);
+  await app.listen(port, '0.0.0.0');
   logger.info('Service started', { port, docs: `http://localhost:${port}/docs` });
 }
 

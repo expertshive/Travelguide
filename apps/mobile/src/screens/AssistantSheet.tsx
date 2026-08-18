@@ -2,10 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAssistant, type AssistantAction, type AssistantContext } from '../lib/assistant';
+import { formatDistance } from '../lib/geo';
+import { searchPlaces, type Place } from '../lib/map';
+import { amenityFromUtterance, nearestInRadius } from '../lib/placeIntent';
 import { isAssistantLanguage, spokenCopy, type AssistantLanguage } from '../lib/assistantPrefs';
 import { speak, stopSpeaking } from '../lib/tts';
 import {
   bindVoice,
+  delay,
   destroyVoice,
   ensureMicPermission,
   startVoice,
@@ -21,6 +25,8 @@ type Props = {
   onClose: () => void;
   /** Apply an action the user confirmed (or that needs no confirmation). */
   onAction: (action: AssistantAction) => void;
+  /** Show a map card for the nearest restaurant / rest area the traveler asked for. */
+  onSuggestStop?: (item: { place: Place; category: string; meters: number }) => void;
 };
 
 function actionLabel(a: AssistantAction): string | null {
@@ -38,7 +44,7 @@ function actionLabel(a: AssistantAction): string | null {
   }
 }
 
-export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
+export function AssistantSheet({ context, persona, onClose, onAction, onSuggestStop }: Props) {
   const assistantName = persona?.name || 'Travel Assistant';
   const langCode = persona?.language;
   const locale: AssistantLanguage = isAssistantLanguage(langCode) ? langCode : 'en-US';
@@ -61,6 +67,30 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
       setTurns((t) => [...t, { role: 'user', text: message }]);
       setThinking(true);
       try {
+        const amenity = amenityFromUtterance(message);
+        if (amenity) {
+          const origin = context.origin;
+          const radius = context.radiusMeters ?? 2000;
+          if (!origin) {
+            const msg = "I need your location to find the nearest one.";
+            setTurns((t) => [...t, { role: 'assistant', text: msg }]);
+            void speak(msg);
+            return;
+          }
+          const found = await searchPlaces(amenity, origin, 8);
+          const near = nearestInRadius(origin, found, radius);
+          if (!near) {
+            const msg = copy.noneNearby(amenity);
+            setTurns((t) => [...t, { role: 'assistant', text: msg }]);
+            void speak(msg);
+            return;
+          }
+          const msg = copy.nearest(amenity, near.place.name, formatDistance(near.meters));
+          setTurns((t) => [...t, { role: 'assistant', text: msg }]);
+          void speak(msg);
+          onSuggestStop?.({ place: near.place, category: amenity, meters: near.meters });
+          return;
+        }
         const result = await askAssistant(message, context);
         setTurns((t) => [...t, { role: 'assistant', text: result.reply }]);
         void speak(result.reply);
@@ -80,73 +110,19 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
         setThinking(false);
       }
     },
-    [context, onAction],
+    [context, copy, onAction, onSuggestStop],
   );
 
   const sendRef = useRef(send);
   sendRef.current = send;
+  const micBusy = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function beginListening() {
-      if (!(await ensureMicPermission())) {
-        if (!cancelled) setMicError('Allow the microphone to talk to the agent.');
-        return;
-      }
-      stopSpeaking();
-      bindVoice({
-        onResult: (text) => {
-          setListening(false);
-          void stopVoice();
-          if (text.trim()) void sendRef.current(text.trim());
-        },
-        onEnd: () => setListening(false),
-        onError: (message) => {
-          setListening(false);
-          setMicError(message);
-        },
-      });
-      try {
-        if (cancelled) return;
-        setListening(true);
-        await startVoice(locale);
-      } catch (error) {
-        if (cancelled) return;
-        setListening(false);
-        setMicError(error instanceof Error ? error.message : 'Could not start the microphone.');
-      }
-    }
-
-    void beginListening();
-    return () => {
-      cancelled = true;
-      void destroyVoice();
-      stopSpeaking();
-    };
-  }, [locale]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, [turns, thinking, pending]);
-
-  async function toggleMic() {
-    if (listening) {
-      setListening(false);
-      await stopVoice();
-      return;
-    }
-    setMicError(null);
-    if (!(await ensureMicPermission())) {
-      setMicError('Allow the microphone to talk to the agent.');
-      return;
-    }
-    stopSpeaking();
     bindVoice({
       onResult: (text) => {
         setListening(false);
         void stopVoice();
-        if (text.trim()) void send(text.trim());
+        if (text.trim()) void sendRef.current(text.trim());
       },
       onEnd: () => setListening(false),
       onError: (message) => {
@@ -154,12 +130,40 @@ export function AssistantSheet({ context, persona, onClose, onAction }: Props) {
         setMicError(message);
       },
     });
+    return () => {
+      void destroyVoice();
+      stopSpeaking();
+    };
+  }, []);
+
+  useEffect(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [turns, thinking, pending]);
+
+  async function toggleMic() {
+    if (micBusy.current) return;
+    if (listening) {
+      setListening(false);
+      await stopVoice();
+      return;
+    }
+    micBusy.current = true;
+    setMicError(null);
     try {
+      if (!(await ensureMicPermission())) {
+        setMicError('Allow the microphone to talk to the agent.');
+        return;
+      }
+      stopSpeaking();
+      // Let TTS / audio release the mic before SpeechRecognizer starts.
+      await delay(500);
       setListening(true);
       await startVoice(locale);
     } catch (error) {
       setListening(false);
       setMicError(error instanceof Error ? error.message : 'Could not start the microphone.');
+    } finally {
+      micBusy.current = false;
     }
   }
 

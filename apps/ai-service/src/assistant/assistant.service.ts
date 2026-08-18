@@ -78,6 +78,20 @@ function languageDisplayName(code?: string): string {
   return LANGUAGE_NAMES[code] ?? LANGUAGE_NAMES[code.split('-')[0] ?? ''] ?? 'English';
 }
 
+const RETIRED_GEMINI = new Set(['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']);
+const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
+
+function geminiModelsToTry(configured?: string): string[] {
+  const models: string[] = [];
+  const push = (id: string) => {
+    const name = id.trim();
+    if (name && !RETIRED_GEMINI.has(name) && !models.includes(name)) models.push(name);
+  };
+  if (configured) push(configured);
+  for (const id of GEMINI_MODELS) push(id);
+  return models;
+}
+
 @Injectable()
 export class AssistantService {
   private readonly logger = createLogger('AssistantService');
@@ -151,7 +165,31 @@ export class AssistantService {
     context: Context,
     weather: AssistantResult['weather'],
   ): Promise<{ reply: string; action?: AssistantAction }> {
-    const model = await this.integrations.getOr('gemini', 'GEMINI_MODEL', 'gemini-flash-latest');
+    const configured = await this.integrations.get('gemini', 'GEMINI_MODEL');
+    const models = geminiModelsToTry(configured);
+    let lastError = 'Gemini request failed';
+
+    for (const model of models) {
+      try {
+        return await this.requestGemini(key, model, message, context, weather);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        const missing = lastError.includes('404') || lastError.toLowerCase().includes('no longer available');
+        if (!missing) throw error;
+        this.logger.warn('Gemini model unavailable, trying the next one', { model, message: lastError });
+      }
+    }
+
+    throw new Error(lastError);
+  }
+
+  private async requestGemini(
+    key: string,
+    model: string,
+    message: string,
+    context: Context,
+    weather: AssistantResult['weather'],
+  ): Promise<{ reply: string; action?: AssistantAction }> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
     const persona = context.assistant;
@@ -173,10 +211,11 @@ export class AssistantService {
       `Always reply in ${langName}. The traveler chose this language in agent settings. The JSON field names stay in English; only the "reply" text is in ${langName}. Action query values stay in English so the map can search.`,
       'You are the Traveler Guide voice co-pilot: a warm, natural, concise in-car travel assistant that talks like a friendly human.',
       'Speak in short spoken sentences — no markdown, no lists. Sound like a helpful co-pilot riding along.',
-      'You can: chat about the destination and nearby places, describe a place briefly, report the weather, find things along the way, and change stops or the route — but only with the user\'s confirmation.',
+      'You can: chat about the destination and famous nearby places, describe a landmark briefly, report the weather, and change stops or the route — but only with the user\'s confirmation.',
       radiusRule,
-      'When the traveller asks to find something on the way or nearby (e.g. "find me the nearest restaurant", "any coffee ahead?", "I need fuel"), use the "add_stop" action with query set to that place type, and in your reply say you found one and ASK if they want to stop there.',
-      'When they ask what a place is like, or about history/food/etc., answer briefly and warmly with action "none".',
+      'Default while traveling: only mention famous or tourist places (landmarks, attractions, museums, historic sites) inside the radius. Do not volunteer restaurants, rest areas, coffee, fuel, mosques, or other amenities.',
+      'If the traveller explicitly asks for a restaurant or a rest area, use action "add_stop" with query "restaurant" or "rest area", and mention ONLY the nearest one — never list several places.',
+      'When they ask what a famous place is like, or about history, answer briefly and warmly with action "none".',
       'IMPORTANT: never say a route change has happened. Propose it and set the action; the app asks the user to confirm before the route actually changes.',
       'Pick exactly one action: "search" (query = what to show on the map), "add_stop" (query = the place type/name to add as a stop and reroute), "remove_stop", "set_route_style" (routeStyle = fastest|shortest|scenic|historical|adventure|food|family|religious|budget), "start_navigation", or "none" for pure conversation.',
       'Keep "reply" to 1-2 natural sentences in the chosen language, suitable for text-to-speech. End route suggestions with a short confirmation question in that language.',

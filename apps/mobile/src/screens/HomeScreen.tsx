@@ -1,6 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import {
   listRecentSearches,
@@ -27,10 +27,10 @@ type Props = TabScreenProps<'Home'>;
 type IconType = (p: { color?: string; size?: number }) => React.ReactElement;
 
 const CATEGORIES = [
-  { label: 'Restaurants', query: 'restaurant', grad: 'sunset' as const, icon: Icon.CompassIcon },
-  { label: 'Hotels', query: 'hotel', grad: 'ocean' as const, icon: Icon.BookmarkIcon },
-  { label: 'Coffee', query: 'coffee', grad: 'brand' as const, icon: Icon.StarIcon },
-  { label: 'Fuel', query: 'gas station', grad: 'night' as const, icon: Icon.CarIcon },
+  { label: 'Restaurants', query: 'restaurant', grad: 'sunset' as const, icon: Icon.FoodIcon },
+  { label: 'Hotels', query: 'hotel', grad: 'ocean' as const, icon: Icon.HotelIcon },
+  { label: 'Coffee', query: 'cafe', grad: 'brand' as const, icon: Icon.CafeIcon },
+  { label: 'Fuel', query: 'gas station', grad: 'night' as const, icon: Icon.FuelIcon },
 ];
 
 const PLACE_ICON: Record<string, IconType> = {
@@ -66,6 +66,16 @@ export function HomeScreen({ navigation }: Props) {
   const [saved, setSaved] = useState<SavedPlace[]>([]);
   const [recent, setRecent] = useState<RecentSearch[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  function openExplore(category: string) {
+    navigation.navigate('Map', { explore: category.trim() });
+  }
+
+  function openSearch(text: string) {
+    const q = text.trim();
+    navigation.navigate('Map', q ? { query: q } : {});
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -124,24 +134,32 @@ export function HomeScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
-          <Pressable style={styles.planCard} onPress={() => navigation.navigate('Map', {})}>
-            <View style={styles.planIcon}>
-              <Icon.NavigationIcon color={colors.primary} size={20} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Txt variant="bodyStrong">Plan a trip</Txt>
-              <Txt variant="small" color={colors.textDim}>
-                Set start, add stops, and pick a destination on the map
-              </Txt>
-            </View>
-            <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
-          </Pressable>
+          <View style={styles.searchBar}>
+            <Icon.SearchIcon color={colors.textFaint} size={18} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Where do you want to go?"
+              placeholderTextColor={colors.textFaint}
+              style={styles.searchInput}
+              returnKeyType="search"
+              onSubmitEditing={() => openSearch(search)}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            <Pressable
+              style={styles.searchGo}
+              onPress={() => openSearch(search)}
+              hitSlop={6}
+            >
+              <Icon.NavigationIcon color={colors.onPrimary} size={18} />
+            </Pressable>
+          </View>
         </Gradient>
 
-        {/* Featured card */}
         <Pressable
-          style={styles.featuredWrap}
-          onPress={() => navigation.navigate('Map', { query: 'attractions' })}
+          style={({ pressed }) => [styles.featuredWrap, pressed && styles.pressed]}
+          onPress={() => openExplore('tourist attraction')}
         >
           <Gradient name="candy" style={styles.featured}>
             <View style={styles.featBlob} pointerEvents="none" />
@@ -153,7 +171,7 @@ export function HomeScreen({ navigation }: Props) {
                 Discover top attractions
               </Txt>
               <Txt variant="small" color="rgba(255,255,255,0.9)" style={{ marginTop: 2 }}>
-                Hand-picked spots near you
+                Famous places near you — tap to open on the map
               </Txt>
               <View style={styles.featCta}>
                 <Txt variant="caption" color={colors.onPrimary}>
@@ -178,8 +196,8 @@ export function HomeScreen({ navigation }: Props) {
               return (
                 <Pressable
                   key={c.label}
-                  style={styles.catItem}
-                  onPress={() => navigation.navigate('Map', { query: c.query })}
+                  style={({ pressed }) => [styles.catItem, pressed && styles.pressed]}
+                  onPress={() => openExplore(c.query)}
                 >
                   <Gradient name={c.grad} style={styles.catIcon}>
                     <CatIcon color={colors.onPrimary} size={24} />
@@ -349,24 +367,34 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   headerTop: { flexDirection: 'row', alignItems: 'center' },
-  planCard: {
+  searchBar: {
     marginTop: spacing.xl,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: spacing.lg,
+    paddingLeft: spacing.lg,
+    paddingRight: 6,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     ...shadow.card,
   },
-  planIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primarySoft,
+  searchInput: {
+    flex: 1,
+    height: 44,
+    color: colors.text,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  searchGo: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
 
   featuredWrap: { marginHorizontal: spacing.xl, marginTop: spacing.xl },
   featured: {

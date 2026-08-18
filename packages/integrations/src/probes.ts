@@ -70,7 +70,7 @@ async function probeMapbox(values: ProbeValues): Promise<ProbeOutcome> {
 async function probeGemini(values: ProbeValues): Promise<ProbeOutcome> {
   const key = values.GEMINI_API_KEY;
   if (!key) return { ok: false, message: 'No API key is configured.' };
-  const model = values.GEMINI_MODEL?.trim() || 'gemini-flash-latest';
+  const model = values.GEMINI_MODEL?.trim() || 'gemini-3.6-flash';
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);

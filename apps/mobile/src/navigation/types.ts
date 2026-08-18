@@ -22,6 +22,8 @@ export type TabParamList = {
   Home: undefined;
   Map: {
     query?: string;
+    /** Category browse from Home — show pins on the map, not a destination typed in END. */
+    explore?: string;
     destination?: PlaceParam;
     origin?: PlaceParam;
     autoStart?: boolean;

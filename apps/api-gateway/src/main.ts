@@ -25,7 +25,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.info('Service started', { port, docs: `http://localhost:${port}/docs`, ws: `ws://localhost:${port}/events` });
 }
 

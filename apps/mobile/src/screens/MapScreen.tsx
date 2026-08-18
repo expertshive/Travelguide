@@ -101,8 +101,9 @@ const ARRIVE_METERS = 45;
 /** Android's default map provider is Google; without a key, overlay OSM tiles. */
 const USE_OSM_TILES = Platform.OS === 'android' && !GOOGLE_MAPS_ENABLED;
 
-/** Categories the assistant proactively watches for along an active route. */
-const INTERESTS = ['coffee', 'restaurant', 'fuel station', 'rest area', 'mosque'];
+/** Famous / tourist places the assistant announces on its own while traveling. */
+const FAMOUS_QUERIES = ['tourist attraction', 'landmark', 'museum', 'historical site'];
+const FAMOUS_LABEL = 'famous place';
 const SUGGEST_INTERVAL_MS = 18000;
 const DEFAULT_RADIUS_M = 2000;
 
@@ -115,8 +116,19 @@ type PlanOpts = {
 };
 type TripField = 'start' | 'end' | number;
 const MAX_STOPS = 4;
+const EXPLORE_TITLES: Record<string, string> = {
+  restaurant: 'Restaurants nearby',
+  hotel: 'Hotels nearby',
+  cafe: 'Coffee nearby',
+  'gas station': 'Fuel nearby',
+  'tourist attraction': 'Attractions nearby',
+};
 
-export function MapScreen({ route }: Props) {
+function exploreTitle(query: string): string {
+  return EXPLORE_TITLES[query.toLowerCase()] ?? `${query} nearby`;
+}
+
+export function MapScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const watchId = useRef<number | null>(null);
@@ -161,6 +173,8 @@ export function MapScreen({ route }: Props) {
   const [prefs, setPrefs] = useState<AssistantPrefs>(DEFAULT_PREFS);
   const [suggestion, setSuggestion] = useState<{ place: Place; category: string; meters: number } | null>(null);
   const [searchRadiusM, setSearchRadiusM] = useState(DEFAULT_RADIUS_M);
+  const [browseQuery, setBrowseQuery] = useState<string | null>(null);
+  const [endSearching, setEndSearching] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -238,7 +252,50 @@ export function MapScreen({ route }: Props) {
     }, []),
   );
 
+  // Home "Explore nearby" / featured: pins on the map, not text in the END field.
+  useFocusEffect(
+    useCallback(() => {
+      const explore = route.params?.explore?.trim();
+      const incoming = route.params?.query?.trim();
+      if (explore) {
+        setBrowseQuery(explore);
+        setQuery('');
+        setEditing('end');
+        setSelected(null);
+        setRoutes([]);
+        setStopPlaces([]);
+        setBanner(null);
+        const near = origin ?? meRef.current ?? undefined;
+        void searchPlaces(explore, near, 15)
+          .then((places) => {
+            setResults(places);
+            if (!places.length) {
+              setBanner(`No ${explore} found nearby.`);
+              return;
+            }
+            const pts = near ? [near, ...places.map((p) => p.center)] : places.map((p) => p.center);
+            mapRef.current?.fitToCoordinates(pts, { edgePadding: EDGE, animated: true });
+          })
+          .catch((err: unknown) => {
+            setResults([]);
+            setBanner(err instanceof Error ? err.message : 'Search failed');
+          });
+        navigation.setParams({ explore: undefined, query: undefined });
+        return;
+      }
+      if (!incoming) return;
+      setBrowseQuery(null);
+      setEditing('end');
+      setSelected(null);
+      setRoutes([]);
+      setStopPlaces([]);
+      setQuery(incoming);
+      navigation.setParams({ query: undefined });
+    }, [navigation, origin, route.params?.explore, route.params?.query]),
+  );
+
   useEffect(() => {
+    if (browseQuery) return;
     const q = query.trim();
     if (q.length < 2) {
       setResults([]);
@@ -248,7 +305,7 @@ export function MapScreen({ route }: Props) {
       searchPlaces(q, origin ?? undefined, 10)
         .then((places) => {
           setResults(places);
-          setBanner(null);
+          setBanner(places.length ? null : `No places found for “${q}”.`);
         })
         .catch((err: unknown) => {
           setResults([]);
@@ -256,7 +313,7 @@ export function MapScreen({ route }: Props) {
         });
     }, 320);
     return () => clearTimeout(t);
-  }, [query]); // origin intentionally excluded to avoid re-searching on GPS drift
+  }, [browseQuery, query]); // origin intentionally excluded to avoid re-searching on GPS drift
 
   const planRoute = useCallback(
     async (dest: Place, opts: PlanOpts = {}) => {
@@ -277,6 +334,9 @@ export function MapScreen({ route }: Props) {
       const p = opts.preference ?? preference;
       const av = opts.avoid ?? avoid;
       setSelected(dest);
+      setBrowseQuery(null);
+      setEditing('end');
+      setEndSearching(false);
       setResults([]);
       setQuery('');
       setPlanning(true);
@@ -365,17 +425,17 @@ export function MapScreen({ route }: Props) {
     if (text) void speak(text);
   }, [navigating, stepIndex, steps]);
 
-  // Proactively look for places of interest near the traveller while driving,
-  // announce them by voice, and offer to add them as a stop. No LLM needed.
+  // While driving, only announce famous places inside the chosen radius.
+  // Restaurants and rest areas wait until the traveler asks.
   useEffect(() => {
     if (!navigating) return;
     const timer = setInterval(async () => {
       const here = meRef.current;
       if (!here || suggestion) return;
-      const category = INTERESTS[interestIdx.current % INTERESTS.length];
+      const query = FAMOUS_QUERIES[interestIdx.current % FAMOUS_QUERIES.length];
       interestIdx.current += 1;
       try {
-        const found = await searchPlaces(category, here, 8);
+        const found = await searchPlaces(query, here, 8);
         const cap = radiusRef.current;
         const near = found
           .map((p) => ({ p, d: haversine(here, p.center) }))
@@ -383,9 +443,13 @@ export function MapScreen({ route }: Props) {
           .sort((a, b) => a.d - b.d)[0];
         if (near) {
           suggestedIds.current.add(near.p.id);
-          setSuggestion({ place: near.p, category, meters: near.d });
+          setSuggestion({ place: near.p, category: FAMOUS_LABEL, meters: near.d });
           void speak(
-            spokenCopy(prefs.language).nearby(category, near.p.name, formatDistance(near.d)),
+            spokenCopy(prefs.language).nearby(
+              FAMOUS_LABEL,
+              near.p.name,
+              formatDistance(near.d),
+            ),
           );
         }
       } catch {
@@ -458,6 +522,12 @@ export function MapScreen({ route }: Props) {
       if (selected) void planRoute(selected, { stops: next });
       return;
     }
+    void planRoute(place);
+  }
+
+  function chooseDestination(place: Place) {
+    setBrowseQuery(null);
+    setEditing('end');
     void planRoute(place);
   }
 
@@ -565,6 +635,8 @@ export function MapScreen({ route }: Props) {
     setSelected(null);
     setRoutes([]);
     setStopPlaces([]);
+    setEndSearching(true);
+    setQuery('');
   }
 
   async function acquireLocation(prompt = true) {
@@ -676,6 +748,395 @@ export function MapScreen({ route }: Props) {
 
   useEffect(() => () => void destroyVoice(), []);
 
+  const showEndInput = editing === 'end' && (endSearching || !selected);
+
+  const plannerFields = (
+    <>
+      <Pressable
+        style={[styles.tripRow, editing === 'start' && styles.tripRowOn]}
+        onPress={() => {
+          setEditing('start');
+          setQuery('');
+          setResults([]);
+        }}
+      >
+        <View style={styles.dotStart} />
+        <View style={{ flex: 1 }}>
+          <Txt variant="caption" color={colors.textFaint}>
+            START
+          </Txt>
+          {editing === 'start' ? (
+            <TextInput
+              placeholder={me ? 'Your current location' : 'Choose a start'}
+              placeholderTextColor={colors.textFaint}
+              value={query}
+              onChangeText={setQuery}
+              style={styles.tripInput}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+          ) : (
+            <Txt variant="bodyStrong" numberOfLines={1}>
+              {startPlace?.name ?? (findingLocation && !me ? 'Finding you…' : 'Your current location')}
+            </Txt>
+          )}
+        </View>
+        {startPlace ? (
+          <Pressable
+            hitSlop={8}
+            onPress={() => {
+              setStartPlace(null);
+              if (selected) void planRoute(selected, { from: me ?? undefined });
+            }}
+          >
+            <Icon.CloseIcon color={colors.textFaint} size={16} />
+          </Pressable>
+        ) : (
+          <Icon.NavigationIcon color={colors.teal} size={16} />
+        )}
+      </Pressable>
+
+      {stopPlaces.map((stop, i) => (
+        <Pressable
+          key={`${stop.id}-${i}`}
+          style={[styles.tripRow, editing === i && styles.tripRowOn]}
+          onPress={() => {
+            setEditing(i);
+            setQuery('');
+            setResults([]);
+          }}
+        >
+          <View style={styles.dotStop}>
+            <Txt variant="caption" color={colors.onPrimary}>
+              {i + 1}
+            </Txt>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt variant="caption" color={colors.textFaint}>
+              STOP
+            </Txt>
+            {editing === i ? (
+              <TextInput
+                placeholder="Search a stop"
+                placeholderTextColor={colors.textFaint}
+                value={query}
+                onChangeText={setQuery}
+                style={styles.tripInput}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+            ) : (
+              <Txt variant="bodyStrong" numberOfLines={1}>
+                {stop.name}
+              </Txt>
+            )}
+          </View>
+          <Pressable hitSlop={8} onPress={() => removeStop(i)}>
+            <Icon.CloseIcon color={colors.textFaint} size={16} />
+          </Pressable>
+        </Pressable>
+      ))}
+
+      <Pressable
+        style={[styles.tripRow, editing === 'end' && styles.tripRowOn]}
+        onPress={() => {
+          setEditing('end');
+          setEndSearching(true);
+          setQuery('');
+          setResults([]);
+        }}
+      >
+        <View style={styles.dotEnd} />
+        <View style={{ flex: 1 }}>
+          <Txt variant="caption" color={colors.textFaint}>
+            END
+          </Txt>
+          {showEndInput ? (
+            <TextInput
+              placeholder={selected?.name ?? 'Where do you want to go?'}
+              placeholderTextColor={colors.textFaint}
+              value={query}
+              onChangeText={setQuery}
+              style={styles.tripInput}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+          ) : selected ? (
+            <>
+              <Txt variant="bodyStrong" numberOfLines={1}>
+                {selected.name}
+              </Txt>
+              {primary ? (
+                <Txt variant="small" color={colors.textDim} numberOfLines={1}>
+                  {formatDuration(primary.durationSeconds)} • {formatDistance(primary.distanceMeters)}
+                  {stopPlaces.length
+                    ? ` • ${stopPlaces.length} stop${stopPlaces.length > 1 ? 's' : ''}`
+                    : ''}
+                </Txt>
+              ) : planning ? (
+                <Txt variant="small" color={colors.textDim}>
+                  Planning route…
+                </Txt>
+              ) : null}
+            </>
+          ) : (
+            <Txt variant="bodyStrong" color={colors.textFaint}>
+              Where do you want to go?
+            </Txt>
+          )}
+        </View>
+        {selected ? (
+          <Pressable hitSlop={8} onPress={() => clearSelection()}>
+            <Icon.CloseIcon color={colors.textFaint} size={16} />
+          </Pressable>
+        ) : (
+          <Icon.SearchIcon color={colors.textFaint} size={16} />
+        )}
+      </Pressable>
+
+      {typeof editing === 'number' && editing >= stopPlaces.length ? (
+        <View style={[styles.tripRow, styles.tripRowOn]}>
+          <View style={styles.dotStop}>
+            <Txt variant="caption" color={colors.onPrimary}>
+              {stopPlaces.length + 1}
+            </Txt>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt variant="caption" color={colors.textFaint}>
+              STOP
+            </Txt>
+            <TextInput
+              placeholder="Search a stop"
+              placeholderTextColor={colors.textFaint}
+              value={query}
+              onChangeText={setQuery}
+              style={styles.tripInput}
+              autoCorrect={false}
+              autoCapitalize="none"
+              autoFocus
+            />
+          </View>
+          <Pressable hitSlop={8} onPress={() => setEditing('end')}>
+            <Icon.CloseIcon color={colors.textFaint} size={16} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {stopPlaces.length < MAX_STOPS ? (
+        <Pressable
+          style={styles.addStopRow}
+          onPress={() => {
+            setEditing(stopPlaces.length);
+            setQuery('');
+            setResults([]);
+          }}
+        >
+          <Icon.PlusIcon color={colors.primary} size={16} />
+          <Txt variant="small" color={colors.primary}>
+            Add stop
+          </Txt>
+        </Pressable>
+      ) : null}
+
+      {editing === 'start' && query.trim().length < 2 && me ? (
+        <Pressable
+          style={styles.tripHit}
+          onPress={() => {
+            setStartPlace(null);
+            setQuery('');
+            setResults([]);
+            setEditing('end');
+          }}
+        >
+          <Icon.NavigationIcon color={colors.teal} size={16} />
+          <Txt variant="bodyStrong">Use current location</Txt>
+        </Pressable>
+      ) : null}
+
+      {banner ? (
+        <View style={styles.searchBanner}>
+          <Txt variant="small" color={colors.danger}>
+            {banner}
+          </Txt>
+        </View>
+      ) : null}
+
+      {results.length && !browseQuery ? (
+        <View style={styles.results}>
+          {results.slice(0, 5).map((p) => {
+            const { Glyph, color } = categoryMeta(p.category);
+            return (
+              <Pressable key={p.id} style={styles.resultRow} onPress={() => pickSearchResult(p)}>
+                <View style={[styles.resultIcon, { backgroundColor: color }]}>
+                  <Glyph color={colors.onPrimary} size={16} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Txt variant="bodyStrong" numberOfLines={1}>
+                    {p.name}
+                  </Txt>
+                  <Txt variant="small" color={colors.textDim} numberOfLines={1}>
+                    {p.address}
+                  </Txt>
+                </View>
+                {selected && editing === 'end' ? (
+                  <Pressable hitSlop={8} style={styles.addStop} onPress={() => void addStop(p)}>
+                    <Icon.PlusIcon color={colors.primary} size={16} />
+                  </Pressable>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+    </>
+  );
+
+  const radiusBlock = (
+    <View style={styles.radiusBlock}>
+      <View style={styles.radiusHead}>
+        <Txt variant="caption" color={colors.textFaint}>
+          AI SEARCH RADIUS
+        </Txt>
+        <Txt variant="bodyStrong">{formatDistance(searchRadiusM)}</Txt>
+      </View>
+      {selected ? null : (
+        <Txt variant="small" color={colors.textDim} style={{ marginBottom: spacing.sm }}>
+          While traveling, the agent only points out famous places in this circle. Ask for a
+          restaurant or rest area to hear the nearest one.
+        </Txt>
+      )}
+      <View style={styles.radiusRow}>
+        {(
+          [
+            [500, '500m'],
+            [1000, '1km'],
+            [2000, '2km'],
+            [5000, '5km'],
+            [10000, '10km'],
+          ] as const
+        ).map(([meters, label]) => {
+          const on = searchRadiusM === meters;
+          return (
+            <Pressable
+              key={meters}
+              style={[styles.radiusChip, on && styles.radiusChipOn]}
+              onPress={() => applySearchRadius(meters)}
+            >
+              <Txt variant="caption" color={on ? colors.onPrimary : colors.text}>
+                {label}
+              </Txt>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const routeDetails = (
+    <>
+      <View style={styles.modes}>
+        {TRAVEL_MODES.map((m) => {
+          const active = m === mode;
+          const { label, icon: MIcon } = MODE_META[m];
+          return (
+            <Pressable
+              key={m}
+              style={[styles.mode, active && styles.modeActive]}
+              onPress={() => changeMode(m)}
+            >
+              <MIcon color={active ? colors.onPrimary : colors.textDim} size={18} />
+              <Txt variant="caption" color={active ? colors.onPrimary : colors.textDim}>
+                {label}
+              </Txt>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {routes.length > 1 ? (
+        <View style={styles.alts}>
+          {routes.map((r, i) => {
+            const active = i === routeIndex;
+            return (
+              <Pressable
+                key={r.id}
+                style={[styles.alt, active && styles.altActive]}
+                onPress={() => setRouteIndex(i)}
+              >
+                <Txt variant="bodyStrong" color={active ? colors.primary : colors.text}>
+                  {formatDuration(r.durationSeconds)}
+                </Txt>
+                <Txt variant="small" color={colors.textDim}>
+                  {formatDistance(r.distanceMeters)} · {i === 0 ? 'Best' : r.summary || `Alt ${i}`}
+                </Txt>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      <Pressable style={styles.optionsToggle} onPress={() => setOptionsOpen((o) => !o)}>
+        <Icon.SettingsIcon color={colors.textDim} size={16} />
+        <Txt variant="small" color={colors.textDim} style={{ flex: 1 }}>
+          Route options
+        </Txt>
+        <Icon.ChevronRightIcon color={colors.textFaint} size={16} />
+      </Pressable>
+      {optionsOpen ? (
+        <View style={styles.options}>
+          <View style={styles.optRow}>
+            {(['fastest', 'shortest'] as RoutePreference[]).map((p) => (
+              <Pressable
+                key={p}
+                style={[styles.chip, preference === p && styles.chipOn]}
+                onPress={() => changePreference(p)}
+              >
+                <Txt variant="small" color={preference === p ? colors.onPrimary : colors.text}>
+                  {p === 'fastest' ? 'Fastest' : 'Shortest'}
+                </Txt>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.optRow}>
+            {(['tolls', 'highways', 'ferries'] as (keyof RouteAvoid)[]).map((k) => (
+              <Pressable
+                key={k}
+                style={[styles.chip, avoid[k] && styles.chipOn]}
+                onPress={() => toggleAvoid(k)}
+              >
+                <Txt variant="small" color={avoid[k] ? colors.onPrimary : colors.text}>
+                  Avoid {k}
+                </Txt>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </>
+  );
+
+  const tripActions = (
+    <View style={styles.tripActions}>
+      <Pressable style={styles.talkBtn} onPress={() => setAssistantOpen(true)}>
+        <Gradient name="candy" style={styles.talkBtnInner}>
+          <Icon.SparkleIcon color={colors.onPrimary} size={18} />
+          <Txt variant="bodyStrong" color={colors.onPrimary}>
+            Voice agent
+          </Txt>
+        </Gradient>
+      </Pressable>
+      <View style={{ flex: 1 }}>
+        <Button
+          title="Start trip"
+          disabled={!selected || !origin}
+          loading={planning}
+          onPress={() => void beginTrip()}
+          style={{ opacity: selected && origin ? 1 : 0.45 }}
+        />
+      </View>
+    </View>
+  );
+
   if (!region) {
     const denied = locationIssue === 'denied';
     const gpsOff = locationIssue === 'disabled';
@@ -751,31 +1212,55 @@ export function MapScreen({ route }: Props) {
         showsPointsOfInterests
         showsBuildings
         toolbarEnabled={false}
+        onPoiClick={(e) => {
+          const { coordinate, name, placeId } = e.nativeEvent;
+          chooseDestination({
+            id: placeId || `poi:${coordinate.latitude},${coordinate.longitude}`,
+            name: name || 'Selected place',
+            address: name || '',
+            center: coordinate,
+          });
+        }}
       >
-        {saved.map((p) => (
-          <Marker
-            key={`saved-${p.id}`}
-            coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-            title={p.label === 'CUSTOM' ? p.name : p.label === 'HOME' ? 'Home' : 'Work'}
-            description={p.address}
-          >
-            <View style={[styles.pin, { backgroundColor: colors.teal }]}>
-              <Icon.BookmarkIcon color={colors.onPrimary} size={14} />
-            </View>
-          </Marker>
-        ))}
+        {saved.map((p) => {
+          const dest: Place = {
+            id: p.id,
+            name: p.label === 'CUSTOM' ? p.name : p.label === 'HOME' ? 'Home' : 'Work',
+            address: p.address,
+            center: { latitude: p.latitude, longitude: p.longitude },
+          };
+          return (
+            <Marker
+              key={`saved-${p.id}`}
+              identifier={`saved-${p.id}`}
+              coordinate={dest.center}
+              title={dest.name}
+              description={p.address}
+              anchor={{ x: 0.5, y: 1 }}
+              tracksViewChanges={false}
+              onPress={() => chooseDestination(dest)}
+            >
+              <View pointerEvents="none" style={[styles.pin, { backgroundColor: colors.teal }]}>
+                <Icon.BookmarkIcon color={colors.onPrimary} size={14} />
+              </View>
+            </Marker>
+          );
+        })}
 
         {results.map((p) => {
           const { Glyph, color } = categoryMeta(p.category);
           return (
             <Marker
               key={`res-${p.id}`}
+              identifier={`res-${p.id}`}
               coordinate={p.center}
               title={p.name}
               description={p.address}
-              onPress={() => void planRoute(p)}
+              anchor={{ x: 0.5, y: 1 }}
+              tracksViewChanges={false}
+              onPress={() => chooseDestination(p)}
             >
-              <View style={[styles.pin, { backgroundColor: color }]}>
+              <View pointerEvents="none" style={[styles.pin, { backgroundColor: color }]}>
                 <Glyph color={colors.onPrimary} size={14} />
               </View>
             </Marker>
@@ -850,7 +1335,38 @@ export function MapScreen({ route }: Props) {
             </Txt>
           </View>
         </View>
-      ) : (
+      ) : browseQuery && !selected ? (
+        <View style={[styles.searchWrap, { top: insets.top + spacing.sm }]} pointerEvents="box-none">
+          <View style={styles.browseBar}>
+            <View style={styles.browseIcon}>
+              <Icon.MapPinIcon color={colors.primary} size={18} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodyStrong">{exploreTitle(browseQuery)}</Txt>
+              <Txt variant="small" color={colors.textDim}>
+                {results.length ? 'Tap a pin on the map to go there' : 'Looking around you…'}
+              </Txt>
+            </View>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                setBrowseQuery(null);
+                setResults([]);
+                setBanner(null);
+              }}
+            >
+              <Icon.CloseIcon color={colors.textFaint} size={18} />
+            </Pressable>
+          </View>
+          {banner ? (
+            <View style={styles.searchBanner}>
+              <Txt variant="small" color={colors.danger}>
+                {banner}
+              </Txt>
+            </View>
+          ) : null}
+        </View>
+      ) : selected ? null : (
         <View style={[styles.searchWrap, { top: insets.top + spacing.sm }]}>
           <View style={styles.tripCard}>
             <Pressable
@@ -1032,7 +1548,8 @@ export function MapScreen({ route }: Props) {
                 <Txt variant="bodyStrong">{formatDistance(searchRadiusM)}</Txt>
               </View>
               <Txt variant="small" color={colors.textDim} style={{ marginBottom: spacing.sm }}>
-                The voice agent only talks about places inside this circle.
+                While traveling, the agent only points out famous places in this circle. Ask for a
+                restaurant or rest area to hear the nearest one.
               </Txt>
               <View style={styles.radiusRow}>
                 {([
@@ -1081,7 +1598,7 @@ export function MapScreen({ route }: Props) {
               </View>
             ) : null}
 
-            {results.length ? (
+            {results.length && !browseQuery ? (
               <View style={styles.results}>
                 {results.slice(0, 5).map((p) => {
                   const { Glyph, color } = categoryMeta(p.category);
@@ -1276,120 +1793,12 @@ export function MapScreen({ route }: Props) {
             </View>
           ) : (
             <>
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }}>
-                <View style={styles.sheetHead}>
-                  <View style={styles.sheetPin}>
-                    <Icon.MapPinIcon color={colors.primary} size={20} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Txt variant="bodyStrong" numberOfLines={1}>
-                      {selected.name}
-                    </Txt>
-                    <Txt variant="small" color={colors.textDim} numberOfLines={1}>
-                      {primary
-                        ? `${formatDuration(primary.durationSeconds)} • ${formatDistance(primary.distanceMeters)}${stopPlaces.length ? ` • ${stopPlaces.length} stop${stopPlaces.length > 1 ? 's' : ''}` : ''}`
-                        : planning
-                          ? 'Planning route…'
-                          : selected.address}
-                    </Txt>
-                  </View>
-                  <Pressable onPress={clearSelection} hitSlop={8} style={styles.close}>
-                    <Icon.CloseIcon color={colors.textDim} size={18} />
-                  </Pressable>
-                </View>
-
-                {/* Travel modes */}
-                <View style={styles.modes}>
-                  {TRAVEL_MODES.map((m) => {
-                    const active = m === mode;
-                    const { label, icon: MIcon } = MODE_META[m];
-                    return (
-                      <Pressable
-                        key={m}
-                        style={[styles.mode, active && styles.modeActive]}
-                        onPress={() => changeMode(m)}
-                      >
-                        <MIcon color={active ? colors.onPrimary : colors.textDim} size={18} />
-                        <Txt variant="caption" color={active ? colors.onPrimary : colors.textDim}>
-                          {label}
-                        </Txt>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* Route alternatives */}
-                {routes.length > 1 ? (
-                  <View style={styles.alts}>
-                    {routes.map((r, i) => {
-                      const active = i === routeIndex;
-                      return (
-                        <Pressable
-                          key={r.id}
-                          style={[styles.alt, active && styles.altActive]}
-                          onPress={() => setRouteIndex(i)}
-                        >
-                          <Txt variant="bodyStrong" color={active ? colors.primary : colors.text}>
-                            {formatDuration(r.durationSeconds)}
-                          </Txt>
-                          <Txt variant="small" color={colors.textDim}>
-                            {formatDistance(r.distanceMeters)} · {i === 0 ? 'Best' : r.summary || `Alt ${i}`}
-                          </Txt>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
-
-                {/* Options */}
-                <Pressable style={styles.optionsToggle} onPress={() => setOptionsOpen((o) => !o)}>
-                  <Icon.SettingsIcon color={colors.textDim} size={16} />
-                  <Txt variant="small" color={colors.textDim} style={{ flex: 1 }}>
-                    Route options
-                  </Txt>
-                  <Icon.ChevronRightIcon color={colors.textFaint} size={16} />
-                </Pressable>
-                {optionsOpen ? (
-                  <View style={styles.options}>
-                    <View style={styles.optRow}>
-                      {(['fastest', 'shortest'] as RoutePreference[]).map((p) => (
-                        <Pressable
-                          key={p}
-                          style={[styles.chip, preference === p && styles.chipOn]}
-                          onPress={() => changePreference(p)}
-                        >
-                          <Txt
-                            variant="small"
-                            color={preference === p ? colors.onPrimary : colors.text}
-                          >
-                            {p === 'fastest' ? 'Fastest' : 'Shortest'}
-                          </Txt>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <View style={styles.optRow}>
-                      {(['tolls', 'highways', 'ferries'] as (keyof RouteAvoid)[]).map((k) => (
-                        <Pressable
-                          key={k}
-                          style={[styles.chip, avoid[k] && styles.chipOn]}
-                          onPress={() => toggleAvoid(k)}
-                        >
-                          <Txt variant="small" color={avoid[k] ? colors.onPrimary : colors.text}>
-                            Avoid {k}
-                          </Txt>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
+                {plannerFields}
+                {routeDetails}
+                {radiusBlock}
               </ScrollView>
-              <Button
-                title="Start trip"
-                left={<Icon.NavigationIcon color={colors.onPrimary} size={18} />}
-                loading={planning}
-                onPress={() => void beginTrip()}
-                style={{ marginTop: spacing.md }}
-              />
+              {tripActions}
             </>
           )}
         </View>
@@ -1402,6 +1811,7 @@ export function MapScreen({ route }: Props) {
           persona={{ name: prefs.name, language: prefs.language }}
           onClose={() => setAssistantOpen(false)}
           onAction={(a) => void onAssistantAction(a)}
+          onSuggestStop={(item) => setSuggestion(item)}
         />
       ) : null}
     </View>
@@ -1451,6 +1861,23 @@ const styles = StyleSheet.create({
   pinLarge: { width: 38, height: 38, borderRadius: 19 },
 
   searchWrap: { position: 'absolute', left: spacing.lg, right: spacing.lg, zIndex: 30, elevation: 24 },
+  browseBar: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    ...shadow.lifted,
+  },
+  browseIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tripCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
