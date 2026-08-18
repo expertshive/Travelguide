@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import { DEV_MACHINE_HOST } from './devMachineHost';
 import {
   clearTokens,
   getAccessToken,
@@ -10,29 +11,14 @@ import type { ApiResponse, AuthTokens, AuthUser } from './types';
 const API_PORT = 4000;
 const REQUEST_TIMEOUT_MS = 15_000;
 
-/**
- * Used only when the bundle host cannot be read, which in practice means a
- * release build. Find the current value with `ipconfig getifaddr en0`.
- */
-const FALLBACK_DEV_HOST = '172.20.10.2';
-
-/**
- * Host serving the JS bundle, which is by definition the development machine —
- * the same one running the API.
- *
- * A physical iPhone cannot reach the Mac as `localhost`, so it needs the Mac's
- * LAN address, and hard-coding that address means the app silently stops working
- * every time the Mac changes network. Metro already had to tell the device where
- * to fetch the bundle from, so that address is reused instead of being maintained
- * by hand.
- */
 function bundleHost(): string | null {
   const scriptUrl = (NativeModules.SourceCode?.scriptURL ?? '') as string;
-  // e.g. http://192.168.1.20:8081/index.bundle?platform=ios — take the hostname.
-  // A bundle read from disk reports a file:// URL, which names no host — the
-  // pattern only matches http(s), so that case falls through to null.
   const match = /^https?:\/\/([^/:]+)/.exec(scriptUrl);
   return match?.[1] ?? null;
+}
+
+function isLoopback(host: string | null | undefined): boolean {
+  return !host || host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
 function isAndroidEmulator(): boolean {
@@ -42,14 +28,23 @@ function isAndroidEmulator(): boolean {
   return /generic|emulator|sdk_gphone|ranchu/i.test(fingerprint);
 }
 
-function resolveApiBase(): string {
-  const host = bundleHost();
-  if (Platform.OS === 'android') {
-    // Emulator: 10.0.2.2 is the host loopback. Physical USB: adb reverse only
-    // forwards IPv4 127.0.0.1, not localhost (::1) and not the LAN address.
-    return `http://${isAndroidEmulator() ? '10.0.2.2' : '127.0.0.1'}:${API_PORT}/v1`;
+/** Reach the PC over Wi-Fi so the Pixel keeps working after USB is unplugged. */
+function resolveApiHost(): string {
+  if (Platform.OS === 'android' && isAndroidEmulator()) {
+    return '10.0.2.2';
   }
-  return `http://${host ?? FALLBACK_DEV_HOST}:${API_PORT}/v1`;
+  const fromBundle = bundleHost();
+  if (fromBundle && !isLoopback(fromBundle) && fromBundle !== '10.0.2.2') {
+    return fromBundle;
+  }
+  if (!isLoopback(DEV_MACHINE_HOST)) {
+    return DEV_MACHINE_HOST;
+  }
+  return fromBundle ?? DEV_MACHINE_HOST;
+}
+
+function resolveApiBase(): string {
+  return `http://${resolveApiHost()}:${API_PORT}/v1`;
 }
 
 const API_BASE = resolveApiBase();

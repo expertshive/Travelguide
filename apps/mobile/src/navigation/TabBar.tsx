@@ -13,7 +13,7 @@ const ICONS: Record<string, (p: IconProps) => React.ReactElement> = {
   Profile: PersonIcon,
 };
 
-/** Floating capsule tab bar. The active tab is a nested pill, not a rectangle. */
+/** Floating tab bar: icon + label, soft selected tint — no solid box. */
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const hidden = useTabBarHidden();
@@ -28,6 +28,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const { options } = descriptors[route.key];
           const label = (options.tabBarLabel as string) ?? route.name;
           const Glyph = ICONS[route.name] ?? HomeIcon;
+          const tint = focused ? colors.primary : colors.textFaint;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -41,15 +42,20 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           };
 
           return (
-            <Pressable key={route.key} onPress={onPress} style={styles.item} hitSlop={8}>
-              <View style={focused ? styles.pill : styles.idle}>
-                <Glyph color={focused ? colors.onPrimary : colors.textFaint} size={focused ? 18 : 22} />
-                {focused ? (
-                  <Txt variant="small" color={colors.onPrimary} style={styles.pillLabel}>
-                    {label}
-                  </Txt>
-                ) : null}
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              hitSlop={4}
+              android_ripple={{ color: colors.primarySoft, borderless: true, radius: 32 }}
+              style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+            >
+              <View style={[styles.iconWrap, focused && styles.iconWrapOn]}>
+                <Glyph color={tint} size={22} />
               </View>
+              <Txt variant="caption" color={tint} style={styles.label}>
+                {label}
+              </Txt>
+              <View style={[styles.dot, focused ? styles.dotOn : styles.dotOff]} />
             </Pressable>
           );
         })}
@@ -57,8 +63,6 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     </View>
   );
 }
-
-const PILL_H = 44;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -72,37 +76,32 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
-    padding: 6,
+    height: 64,
+    paddingHorizontal: 4,
     backgroundColor: colors.surface,
-    borderRadius: radius.pill,
+    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
-    ...shadow.lifted,
+    ...shadow.card,
   },
   item: {
     flex: 1,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
   },
-  idle: {
-    width: PILL_H,
-    height: PILL_H,
-    borderRadius: PILL_H / 2,
+  pressed: { opacity: 0.72 },
+  iconWrap: {
+    width: 36,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 14,
   },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: PILL_H,
-    paddingHorizontal: 16,
-    borderRadius: PILL_H / 2,
-    backgroundColor: colors.primary,
-    gap: 6,
-  },
-  pillLabel: { fontWeight: '700' },
+  iconWrapOn: { backgroundColor: colors.primarySoft },
+  label: { fontWeight: '700', letterSpacing: 0.2 },
+  dot: { width: 4, height: 4, borderRadius: 2, marginTop: 1 },
+  dotOn: { backgroundColor: colors.primary },
+  dotOff: { backgroundColor: 'transparent' },
 });

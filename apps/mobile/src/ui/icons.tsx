@@ -164,6 +164,32 @@ export function RouteIcon(props: IconProps) {
   );
 }
 
+export function MenuIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <Path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+    </IconFrame>
+  );
+}
+
+export function ShareIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <Path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" strokeLinecap="round" />
+      <Path d="M12 16V4M8 8l4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </IconFrame>
+  );
+}
+
+export function ListIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <Path d="M8 6h12M8 12h12M8 18h12" strokeLinecap="round" />
+      <Path d="M4 6h.01M4 12h.01M4 18h.01" strokeLinecap="round" />
+    </IconFrame>
+  );
+}
+
 export function SwapIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
