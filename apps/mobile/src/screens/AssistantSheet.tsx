@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAssistant, type AssistantAction, type AssistantContext } from '../lib/assistant';
-import { formatDistance } from '../lib/geo';
-import { searchPlaces, type Place } from '../lib/map';
-import { amenityFromUtterance, nearestInRadius } from '../lib/placeIntent';
+import type { Place } from '../lib/map';
 import { isAssistantLanguage, spokenCopy, type AssistantLanguage } from '../lib/assistantPrefs';
 import { speak, stopSpeaking } from '../lib/tts';
 import {
@@ -28,6 +26,20 @@ type Props = {
   /** Show a map card for the nearest restaurant / rest area the traveler asked for. */
   onSuggestStop?: (item: { place: Place; category: string; meters: number }) => void;
 };
+
+function isAffirmative(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return /^(yes|yeah|yep|yup|sure|ok|okay|confirm|do it|go ahead|please|haan|haanji|جی|ہاں|نعم|ايوه|oui|sí|si|claro|evet|tamam)\b/i.test(
+    t,
+  );
+}
+
+function isNegative(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return /^(no|nope|nah|not now|cancel|don't|stop|نہیں|لا|non|ahora no|hayır|şimdi değil)\b/i.test(
+    t,
+  );
+}
 
 function actionLabel(a: AssistantAction): string | null {
   switch (a.type) {
@@ -58,39 +70,33 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
   const [listening, setListening] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [pending, setPending] = useState<AssistantAction | null>(null);
+  const pendingRef = useRef<AssistantAction | null>(null);
+  pendingRef.current = pending;
   const [micError, setMicError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
   const send = useCallback(
     async (message: string) => {
+      const waiting = pendingRef.current;
+      if (waiting) {
+        if (isAffirmative(message)) {
+          setTurns((t) => [...t, { role: 'user', text: message }]);
+          onAction(waiting);
+          setPending(null);
+          void speak(copy.okay);
+          return;
+        }
+        if (isNegative(message)) {
+          setTurns((t) => [...t, { role: 'user', text: message }]);
+          setPending(null);
+          void speak(copy.confirmNotNow);
+          return;
+        }
+      }
       setTurns((t) => [...t, { role: 'user', text: message }]);
       setThinking(true);
       try {
-        const amenity = amenityFromUtterance(message);
-        if (amenity) {
-          const origin = context.origin;
-          const radius = context.radiusMeters ?? 2000;
-          if (!origin) {
-            const msg = "I need your location to find the nearest one.";
-            setTurns((t) => [...t, { role: 'assistant', text: msg }]);
-            void speak(msg);
-            return;
-          }
-          const found = await searchPlaces(amenity, origin, 8);
-          const near = nearestInRadius(origin, found, radius);
-          if (!near) {
-            const msg = copy.noneNearby(amenity);
-            setTurns((t) => [...t, { role: 'assistant', text: msg }]);
-            void speak(msg);
-            return;
-          }
-          const msg = copy.nearest(amenity, near.place.name, formatDistance(near.meters));
-          setTurns((t) => [...t, { role: 'assistant', text: msg }]);
-          void speak(msg);
-          onSuggestStop?.({ place: near.place, category: amenity, meters: near.meters });
-          return;
-        }
         const result = await askAssistant(message, context);
         setTurns((t) => [...t, { role: 'assistant', text: result.reply }]);
         void speak(result.reply);
@@ -98,6 +104,10 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
         if (action && action.type !== 'none') {
           if (action.requiresConfirmation) {
             setPending(action);
+            const label = actionLabel(action);
+            if (label && !/\?\s*$/.test(result.reply.trim())) {
+              void speak(copy.confirmAsk(label));
+            }
           } else {
             onAction(action); // e.g. search — safe to apply immediately
           }
@@ -110,7 +120,7 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
         setThinking(false);
       }
     },
-    [context, copy, onAction, onSuggestStop],
+    [context, copy, onAction],
   );
 
   const sendRef = useRef(send);
@@ -135,6 +145,10 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
       stopSpeaking();
     };
   }, []);
+
+  useEffect(() => {
+    void speak(copy.greeting(assistantName));
+  }, [assistantName, copy]);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
@@ -168,7 +182,10 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
   }
 
   function confirmPending() {
-    if (pending) onAction(pending);
+    if (pending) {
+      onAction(pending);
+      void speak(copy.okay);
+    }
     setPending(null);
   }
 
@@ -239,7 +256,10 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
                   size="md"
                   full={false}
                   style={{ flex: 1 }}
-                  onPress={() => setPending(null)}
+                  onPress={() => {
+                    setPending(null);
+                    void speak(copy.confirmNotNow);
+                  }}
                 />
                 <Button
                   title={copy.confirmOk}

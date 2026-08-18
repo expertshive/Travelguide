@@ -15,6 +15,9 @@ coverage
 .env.production
 !.env.example
 
+# Local DB dumps (contain password hashes)
+.backups/
+
 # Map provider secrets. Mapbox download tokens belong in ~/.gradle/gradle.properties
 # and ~/.netrc, never in the repo.
 .netrc

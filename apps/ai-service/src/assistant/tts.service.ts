@@ -129,9 +129,12 @@ export class TtsService {
       model_id: model,
       apply_text_normalization: 'on',
       voice_settings: {
-        stability: needsIndicModel(lang) ? 0.4 : 0.45,
-        similarity_boost: 0.75,
-        speed: needsIndicModel(lang) ? 0.92 : 1,
+        // Lower stability + a bit of style reads like a person, not a GPS.
+        stability: needsIndicModel(lang) ? 0.38 : 0.32,
+        similarity_boost: 0.8,
+        style: needsIndicModel(lang) ? 0.25 : 0.42,
+        use_speaker_boost: true,
+        speed: needsIndicModel(lang) ? 0.94 : 0.98,
       },
     };
     // Not supported on multilingual_v2; required for Hindi/Urdu on v3 / flash.
@@ -141,7 +144,7 @@ export class TtsService {
 
     try {
       const res = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_22050_32`,
+        `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,
         {
           method: 'POST',
           headers: {

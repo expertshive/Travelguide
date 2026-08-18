@@ -44,10 +44,7 @@ export DOMAIN
 echo "==> Public API will be https://${DOMAIN}/v1"
 
 echo "==> Docker infra"
-docker compose \
-  -f infrastructure/docker/docker-compose.yml \
-  -f infrastructure/ec2/docker-compose.ports.yml \
-  up -d
+docker compose -f infrastructure/ec2/docker-compose.infra.yml up -d
 
 echo "==> Waiting for MySQL"
 for i in $(seq 1 30); do
@@ -94,6 +91,9 @@ echo "==> Seed auth"
 (cd apps/auth-service && DATABASE_URL="$DATABASE_URL_AUTH" pnpm prisma:seed)
 
 echo "==> Build shared packages"
+pnpm --filter @traveler-guide/logger build
+pnpm --filter @traveler-guide/config build
+pnpm --filter @traveler-guide/contracts build
 pnpm --filter @traveler-guide/types build
 pnpm --filter @traveler-guide/db-admin build
 pnpm --filter @traveler-guide/integrations build
@@ -116,12 +116,20 @@ start_daemon() {
 }
 
 export NODE_OPTIONS
+echo "==> Build Nest apps (one at a time so t2.medium does not freeze)"
+(cd "$ROOT/apps/api-gateway" && pnpm build)
+for entry in "${SERVICES[@]}"; do
+  IFS=':' read -r svc _port _var <<< "$entry"
+  echo "  build $svc"
+  (cd "$ROOT/apps/$svc" && pnpm build)
+done
+
 echo "==> Starting Nest services"
-start_daemon api-gateway "cd $ROOT/apps/api-gateway && set -a && source $ROOT/.env && set +a && PORT=4000 NODE_ENV=$NODE_ENV NODE_OPTIONS='$NODE_OPTIONS' pnpm dev"
+start_daemon api-gateway "cd $ROOT/apps/api-gateway && set -a && source $ROOT/.env && set +a && PORT=4000 NODE_ENV=$NODE_ENV NODE_OPTIONS='$NODE_OPTIONS' node dist/main"
 
 for entry in "${SERVICES[@]}"; do
   IFS=':' read -r svc port var <<< "$entry"
-  start_daemon "$svc" "cd $ROOT/apps/$svc && set -a && source $ROOT/.env && set +a && PORT=$port DATABASE_URL=${!var} NODE_ENV=$NODE_ENV NODE_OPTIONS='$NODE_OPTIONS' pnpm dev"
+  start_daemon "$svc" "cd $ROOT/apps/$svc && set -a && source $ROOT/.env && set +a && PORT=$port DATABASE_URL=${!var} NODE_ENV=$NODE_ENV NODE_OPTIONS='$NODE_OPTIONS' node dist/main"
 done
 
 echo "==> Caddy (HTTPS)"

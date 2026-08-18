@@ -92,13 +92,18 @@ async function speakDevice(text: string): Promise<void> {
 }
 
 async function speakNow(text: string): Promise<void> {
-  if (!text) return;
+  const spoken = text
+    .replace(/[*_`#]/g, '')
+    .replace(/^\s*[-•]\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!spoken) return;
   stopAudio();
 
   const useEleven = Date.now() >= elevenSkipUntil;
   if (useEleven) {
     try {
-      const audio = await synthesizeSpeech(text, currentGender, currentLanguage);
+      const audio = await synthesizeSpeech(spoken, currentGender, currentLanguage);
       if (audio) {
         elevenMisses = 0;
         await playBase64Mp3(audio);
@@ -114,7 +119,7 @@ async function speakNow(text: string): Promise<void> {
     }
   }
 
-  await speakDevice(text);
+  await speakDevice(spoken);
 }
 
 /**

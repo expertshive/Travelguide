@@ -58,6 +58,8 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
   if (!headers.has('Content-Type') && init.body && !isFormData) {
     headers.set('Content-Type', 'application/json');
   }
+  headers.set('bypass-tunnel-reminder', 'true');
+  headers.set('ngrok-skip-browser-warning', 'true');
 
   if (auth) {
     const token = await getAccessToken();

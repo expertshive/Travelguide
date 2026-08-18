@@ -41,8 +41,12 @@ RSYNC=(rsync -az --delete
   --exclude .next
   --exclude coverage
   --exclude 'apps/mobile'
-  --exclude 'apps/web/.next'
+  --exclude 'apps/web'
+  --exclude 'apps/admin'
+  --exclude 'src/generated'
   --exclude 'postman'
+  --exclude '.claude'
+  --exclude '*.pptx'
   --exclude '*.log'
 )
 

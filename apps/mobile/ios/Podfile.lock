@@ -1615,8 +1615,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-voice (3.2.4):
+  - react-native-voice (1.0.4):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
     - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - React-NativeModulesApple (0.86.0):
     - hermes-engine
     - React-callinvoker
@@ -2223,7 +2243,7 @@ DEPENDENCIES:
   - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - react-native-maps/Google (from `../node_modules/react-native-maps`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
-  - "react-native-voice (from `../node_modules/@react-native-voice/voice`)"
+  - "react-native-voice (from `../node_modules/@dev-amirzubair/react-native-voice`)"
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-networking (from `../node_modules/react-native/ReactCommon/react/networking`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2362,7 +2382,7 @@ EXTERNAL SOURCES:
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-voice:
-    :path: "../node_modules/@react-native-voice/voice"
+    :path: "../node_modules/@dev-amirzubair/react-native-voice"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-networking:
@@ -2496,7 +2516,7 @@ SPEC CHECKSUMS:
   react-native-image-picker: 23540feacc79c63c60857f318fdfa8477c26e70a
   react-native-maps: 7e3af023b773d6670e3c07e9c8170af842b243e0
   react-native-safe-area-context: fb5c8ee9f6dd62ef710611b3d370c501f42a4ac0
-  react-native-voice: 908a0eba96c8c3d643e4f98b7232c6557d0a6f9c
+  react-native-voice: 9fe605aa9084b058163803b10c972eb864cd27b1
   React-NativeModulesApple: a092d89b58f635ebfab88048b0eda9fb516819fd
   React-networking: 968bbbe73590149feb1e72b2af4f6a68e4796ece
   React-oscompat: 0b72a7e926954a0415ccd83e0748b6561fe45367

@@ -50,9 +50,14 @@ function delay(ms: number): Promise<void> {
 
 /** Wire up the voice recognition callbacks. Call once before starting. */
 export function bindVoice(handlers: VoiceHandlers): void {
+  let last = '';
+  Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
+    const text = e.value?.[0]?.trim();
+    if (text) last = text;
+  };
   Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-    const text = e.value?.[0];
-    if (text) handlers.onResult(text);
+    const text = e.value?.[0]?.trim();
+    if (text) last = text;
   };
   Voice.onSpeechError = (e: SpeechErrorEvent) => {
     const raw = e.error?.message ?? '';
@@ -61,7 +66,12 @@ export function bindVoice(handlers: VoiceHandlers): void {
     }
     handlers.onError?.(speechErrorMessage(raw));
   };
-  Voice.onSpeechEnd = () => handlers.onEnd?.();
+  Voice.onSpeechEnd = () => {
+    const text = last;
+    last = '';
+    if (text) handlers.onResult(text);
+    handlers.onEnd?.();
+  };
 }
 
 /** Android needs an explicit RECORD_AUDIO grant; iOS prompts on first start. */
@@ -96,10 +106,14 @@ export async function startVoice(locale = 'en-US'): Promise<void> {
   try {
     await Voice.start(recognitionLocale(locale), {
       EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
-      EXTRA_PARTIAL_RESULTS: false,
-      EXTRA_PREFER_OFFLINE: true,
+      EXTRA_PARTIAL_RESULTS: true,
+      EXTRA_PREFER_OFFLINE: false,
       REQUEST_PERMISSIONS_AUTO: true,
-      EXTRA_MAX_RESULTS: 1,
+      EXTRA_MAX_RESULTS: 3,
+      // Give the traveler time to speak a full sentence, not a keyword.
+      EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 1500,
+      EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1800,
+      EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1500,
     });
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);

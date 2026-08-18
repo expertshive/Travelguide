@@ -61,6 +61,8 @@ export function mapsLanguage(code: AssistantLanguage): string {
 type SpokenPack = {
   preview: (name: string) => string;
   greeting: (name: string) => string;
+  filler: string;
+  okay: string;
   listening: string;
   thinking: string;
   idleHint: string;
@@ -74,6 +76,7 @@ type SpokenPack = {
   nearest: (category: string, place: string, distance: string) => string;
   noneNearby: (category: string) => string;
   confirmTitle: string;
+  confirmAsk: (what: string) => string;
   confirmNotNow: string;
   confirmOk: string;
 };
@@ -82,7 +85,9 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
   'en-US': {
     preview: (name) => `Hi, I'm ${name}, your travel co-pilot. Where would you like to go?`,
     greeting: (name) =>
-      `Hi! I'm ${name}. I'll point out famous places nearby. Ask if you need a restaurant or rest area.`,
+      `Hey, I'm ${name}. Talk to me like you would a friend in the passenger seat — I'll answer.`,
+    filler: 'One second…',
+    okay: 'Got it.',
     listening: 'Listening…',
     thinking: 'Thinking…',
     idleHint: 'Tap the mic and talk',
@@ -100,12 +105,16 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     noneNearby: (category) =>
       `I don't see a ${category} inside your selected radius.`,
     confirmTitle: 'Confirm before I change your route',
+    confirmAsk: (what) => `Want me to ${what.toLowerCase()}? Just say yes, or say not now.`,
     confirmNotNow: 'Not now',
     confirmOk: 'Confirm',
   },
   'ar-SA': {
     preview: (name) => `مرحباً، أنا ${name}، مساعدك في الرحلة. إلى أين تود الذهاب؟`,
-    greeting: (name) => `مرحباً، أنا ${name}. سأخبركم بالأماكن الشهيرة القريبة. اسأل عن مطعم أو استراحة إن احتجت.`,
+    greeting: (name) =>
+      `مرحباً، أنا ${name}. سأرافقك وأذكر الأماكن الشهيرة القريبة. كلّمني متى شئت.`,
+    filler: 'لحظة…',
+    okay: 'تمام.',
     listening: 'يستمع…',
     thinking: 'يفكر…',
     idleHint: 'اضغط على الميكروفون وتحدث',
@@ -122,12 +131,16 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
       `أقرب ${category} هو ${place}، على بعد حوالي ${distance}.`,
     noneNearby: (category) => `لا أرى ${category} داخل النطاق الذي اخترته.`,
     confirmTitle: 'أكد قبل أن أغيّر مسارك',
+    confirmAsk: (what) => `هل تريد أن أقوم بـ: ${what}؟ قل نعم، أو قل ليس الآن.`,
     confirmNotNow: 'ليس الآن',
     confirmOk: 'تأكيد',
   },
   'ur-PK': {
     preview: (name) => `السلام علیکم، میں ${name} ہوں، آپ کا سفری ساتھی۔ آپ کہاں جانا چاہتے ہیں؟`,
-    greeting: (name) => `السلام علیکم! میں ${name} ہوں۔ مشہور مقامات بتاؤں گا۔ ریسٹورانٹ یا ریسٹ ایریا چاہیے تو پوچھیں۔`,
+    greeting: (name) =>
+      `السلام علیکم! میں ${name} ہوں۔ ساتھ رہوں گا اور مشہور جگہیں بتاؤں گا۔ جب چاہو بات کر لو۔`,
+    filler: 'ایک لمحہ…',
+    okay: 'ٹھیک ہے۔',
     listening: 'سن رہا ہے…',
     thinking: 'سوچ رہا ہے…',
     idleHint: 'مائیک دبائیں اور بات کریں',
@@ -144,12 +157,16 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
       `قریب ترین ${category} ${place} ہے، تقریباً ${distance} دور۔`,
     noneNearby: (category) => `منتخب رداس میں کوئی ${category} نہیں ملا۔`,
     confirmTitle: 'راستہ بدلنے سے پہلے تصدیق کریں',
+    confirmAsk: (what) => `کیا میں ${what} کروں؟ ہاں کہو، یا ابھی نہیں کہو۔`,
     confirmNotNow: 'ابھی نہیں',
     confirmOk: 'تصدیق',
   },
   'hi-IN': {
     preview: (name) => `नमस्ते, मैं ${name} हूँ, आपका यात्रा साथी। आप कहाँ जाना चाहते हैं?`,
-    greeting: (name) => `नमस्ते! मैं ${name} हूँ। पास के प्रसिद्ध स्थान बताऊँगा। रेस्तरां या रेस्ट एरिया चाहिए तो पूछें।`,
+    greeting: (name) =>
+      `नमस्ते! मैं ${name} हूँ। साथ रहूँगा और पास की मशहूर जगहें बताऊँगा। जब चाहो, मुझसे बात करो।`,
+    filler: 'एक पल…',
+    okay: 'ठीक है।',
     listening: 'सुन रहा है…',
     thinking: 'सोच रहा है…',
     idleHint: 'माइक दबाएँ और बोलें',
@@ -166,13 +183,16 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
       `सबसे नज़दीकी ${category} ${place} है, लगभग ${distance} दूर।`,
     noneNearby: (category) => `चुनी हुई दूरी में कोई ${category} नहीं मिला।`,
     confirmTitle: 'रास्ता बदलने से पहले पुष्टि करें',
+    confirmAsk: (what) => `क्या मैं ${what} करूँ? हाँ बोलो, या अभी नहीं बोलो।`,
     confirmNotNow: 'अभी नहीं',
     confirmOk: 'पुष्टि',
   },
   'fr-FR': {
     preview: (name) => `Bonjour, je suis ${name}, votre copilote. Où souhaitez-vous aller ?`,
     greeting: (name) =>
-      `Bonjour ! Je suis ${name}. Je signale les lieux célèbres. Demandez un restaurant ou une aire de repos si besoin.`,
+      `Bonjour ! Je suis ${name}. Je t’accompagne et je te signale les beaux endroits. Parle-moi quand tu veux.`,
+    filler: 'Une seconde…',
+    okay: 'D’accord.',
     listening: 'J’écoute…',
     thinking: 'Je réfléchis…',
     idleHint: 'Touchez le micro et parlez',
@@ -189,13 +209,16 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
       `Le ${category} le plus proche est ${place}, à environ ${distance}.`,
     noneNearby: (category) => `Je ne vois pas de ${category} dans le rayon choisi.`,
     confirmTitle: 'Confirmez avant que je change l’itinéraire',
+    confirmAsk: (what) => `Je ${what.toLowerCase()} ? Dis oui, ou dis pas maintenant.`,
     confirmNotNow: 'Pas maintenant',
     confirmOk: 'Confirmer',
   },
   'es-ES': {
     preview: (name) => `Hola, soy ${name}, tu copiloto de viaje. ¿Adónde quieres ir?`,
     greeting: (name) =>
-      `¡Hola! Soy ${name}. Te cuento los lugares famosos cercanos. Pregunta si necesitas un restaurante o un área de descanso.`,
+      `¡Hola! Soy ${name}. Voy contigo y te cuento los sitios buenos cerca. Háblame cuando quieras.`,
+    filler: 'Un segundo…',
+    okay: 'Vale.',
     listening: 'Escuchando…',
     thinking: 'Pensando…',
     idleHint: 'Toca el micrófono y habla',
@@ -212,13 +235,16 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
       `El ${category} más cercano es ${place}, a unos ${distance}.`,
     noneNearby: (category) => `No veo ningún ${category} en el radio elegido.`,
     confirmTitle: 'Confirma antes de que cambie la ruta',
+    confirmAsk: (what) => `¿Quieres que ${what.toLowerCase()}? Di que sí, o di que ahora no.`,
     confirmNotNow: 'Ahora no',
     confirmOk: 'Confirmar',
   },
   'tr-TR': {
     preview: (name) => `Merhaba, ben ${name}, seyahat yardımcın. Nereye gitmek istersin?`,
     greeting: (name) =>
-      `Merhaba! Ben ${name}. Yakındaki ünlü yerleri söyleyeceğim. Restoran veya dinlenme tesisi istersen sor.`,
+      `Merhaba! Ben ${name}. Yanındayım, yakındaki güzel yerleri söyleyeceğim. İstediğin zaman konuş.`,
+    filler: 'Bir saniye…',
+    okay: 'Tamam.',
     listening: 'Dinliyorum…',
     thinking: 'Düşünüyorum…',
     idleHint: 'Mikrofona dokun ve konuş',
@@ -235,6 +261,7 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
       `En yakın ${category} ${place}, yaklaşık ${distance}.`,
     noneNearby: (category) => `Seçilen yarıçapta ${category} göremiyorum.`,
     confirmTitle: 'Rotayı değiştirmeden önce onayla',
+    confirmAsk: (what) => `${what} yapayım mı? Evet de, ya da şimdi değil de.`,
     confirmNotNow: 'Şimdi değil',
     confirmOk: 'Onayla',
   },
