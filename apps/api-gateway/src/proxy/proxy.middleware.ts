@@ -192,6 +192,8 @@ export class ProxyMiddleware implements NestMiddleware {
     }
 
     const targetUrl = `${baseUrl}${req.originalUrl}`;
+    const started = Date.now();
+    this.logger.info(`${req.method} ${req.originalUrl} → ${envKey}`, { correlationId });
 
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
@@ -215,6 +217,7 @@ export class ProxyMiddleware implements NestMiddleware {
       method: req.method,
       headers,
       redirect: 'manual',
+      signal: AbortSignal.timeout(12_000),
     };
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -248,11 +251,15 @@ export class ProxyMiddleware implements NestMiddleware {
         res.setHeader(key, value);
       });
       const body = Buffer.from(await upstream.arrayBuffer());
+      this.logger.info(`${req.method} ${req.originalUrl} ← ${upstream.status} ${Date.now() - started}ms`, {
+        correlationId,
+      });
       res.send(body);
     } catch (error) {
       this.logger.error('Upstream request failed', {
         correlationId,
         target: envKey,
+        ms: Date.now() - started,
         message: error instanceof Error ? error.message : String(error),
       });
       res.status(502).json({

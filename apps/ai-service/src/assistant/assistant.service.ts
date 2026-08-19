@@ -78,8 +78,13 @@ function languageDisplayName(code?: string): string {
   return LANGUAGE_NAMES[code] ?? LANGUAGE_NAMES[code.split('-')[0] ?? ''] ?? 'English';
 }
 
-const RETIRED_GEMINI = new Set(['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']);
-const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
+const RETIRED_GEMINI = new Set([
+  'gemini-3.6-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+]);
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest'];
 
 function geminiModelsToTry(configured?: string): string[] {
   const models: string[] = [];
@@ -102,26 +107,63 @@ export class AssistantService {
   ) {}
 
   async ask(message: string, context: Context = {}): Promise<AssistantResult> {
-    const weather = await this.weatherFor(context.destination);
-    // Read per request so a key rotated in the admin portal takes effect without
-    // restarting the service.
-    const key = await this.integrations.get('gemini', 'GEMINI_API_KEY');
+    const started = Date.now();
+    this.logger.info('Assistant ask start', { preview: message.slice(0, 80) });
+    const [weather, openaiKey, geminiKey] = await Promise.all([
+      this.weatherFor(context.destination),
+      this.integrations.get('openai', 'OPENAI_API_KEY'),
+      this.integrations.get('gemini', 'GEMINI_API_KEY'),
+    ]);
 
-    if (!key) {
+    if (!openaiKey && !geminiKey) {
       return {
         reply:
-          "I'm not fully set up yet — add a Gemini API key to the ai-service and I'll be able to chat.",
+          "I'm not fully set up yet — add an OpenAI or Gemini API key and I'll be able to chat.",
         action: { type: 'none' },
         weather,
       };
     }
 
+    const prompt = this.buildPrompt(message, context, weather);
+
+    if (openaiKey) {
+      try {
+        const result = await this.callOpenAI(openaiKey, prompt);
+        const action = this.normaliseAction(result.action);
+        this.logger.info('Assistant ask done', {
+          provider: 'openai',
+          ms: Date.now() - started,
+          action: action.type,
+        });
+        return { reply: result.reply, action, weather };
+      } catch (error) {
+        this.logger.error('OpenAI request failed', {
+          ms: Date.now() - started,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        if (!geminiKey) {
+          return {
+            reply: "Sorry, I couldn't reach my brain just now. Please try again in a moment.",
+            action: { type: 'none' },
+            weather,
+          };
+        }
+        this.logger.warn('Falling back to Gemini after OpenAI failure');
+      }
+    }
+
     try {
-      const result = await this.callGemini(key, message, context, weather);
+      const result = await this.callGemini(geminiKey as string, prompt);
       const action = this.normaliseAction(result.action);
+      this.logger.info('Assistant ask done', {
+        provider: 'gemini',
+        ms: Date.now() - started,
+        action: action.type,
+      });
       return { reply: result.reply, action, weather };
     } catch (error) {
       this.logger.error('Gemini request failed', {
+        ms: Date.now() - started,
         message: error instanceof Error ? error.message : String(error),
       });
       return {
@@ -145,7 +187,7 @@ export class AssistantService {
       const url =
         `https://api.open-meteo.com/v1/forecast?latitude=${dest.latitude}` +
         `&longitude=${dest.longitude}&current=temperature_2m,weather_code,wind_speed_10m`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(800) });
       if (!res.ok) return null;
       const body = (await res.json()) as {
         current?: { temperature_2m?: number; weather_code?: number };
@@ -159,39 +201,11 @@ export class AssistantService {
     }
   }
 
-  private async callGemini(
-    key: string,
+  private buildPrompt(
     message: string,
     context: Context,
     weather: AssistantResult['weather'],
-  ): Promise<{ reply: string; action?: AssistantAction }> {
-    const configured = await this.integrations.get('gemini', 'GEMINI_MODEL');
-    const models = geminiModelsToTry(configured);
-    let lastError = 'Gemini request failed';
-
-    for (const model of models) {
-      try {
-        return await this.requestGemini(key, model, message, context, weather);
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
-        const missing = lastError.includes('404') || lastError.toLowerCase().includes('no longer available');
-        if (!missing) throw error;
-        this.logger.warn('Gemini model unavailable, trying the next one', { model, message: lastError });
-      }
-    }
-
-    throw new Error(lastError);
-  }
-
-  private async requestGemini(
-    key: string,
-    model: string,
-    message: string,
-    context: Context,
-    weather: AssistantResult['weather'],
-  ): Promise<{ reply: string; action?: AssistantAction }> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-
+  ): { system: string; userText: string } {
     const persona = context.assistant;
     const radiusM =
       typeof context.radiusMeters === 'number' && context.radiusMeters > 0
@@ -208,7 +222,7 @@ export class AssistantService {
 
     const system = [
       personaLine,
-      `Always reply in ${langName}. The traveler chose this language in agent settings. The JSON field names stay in English; only the "reply" text is in ${langName}. Action query values stay in English so the map can search.`,
+      `The traveler may speak any language — English, Urdu, Hindi, Arabic, or a mix, including roman Urdu like "kahan chalain". Reply in the SAME language and script they just used. Do not translate into ${langName} unless they spoke ${langName}. JSON field names stay English; only "reply" is in their language. Action query values stay in English so the map can search.`,
       'You are a real travel companion sitting in the passenger seat — warm, easy-going, a little witty. Never say you are an AI, a model, or an assistant.',
       'EVERY reply is spoken out loud. Write the way people talk: contractions, natural rhythm, a small pause as a comma. No markdown, no bullets, no numbered lists, no asterisks, no emoji.',
       'Keep it to one or two short spoken sentences. Sound like you are chatting, not reading a script or a GPS.',
@@ -243,13 +257,95 @@ export class AssistantService {
     }
     if (weather) ctxLines.push(`Destination weather: ${weather.summary}, ${weather.temperatureC}°C`);
 
-    const userText = `${ctxLines.length ? `Trip context:\n${ctxLines.join('\n')}\n\n` : ''}Traveler said: "${message}"`;
+    return {
+      system,
+      userText: `${ctxLines.length ? `Trip context:\n${ctxLines.join('\n')}\n\n` : ''}Traveler said: "${message}"`,
+    };
+  }
+
+  private async callOpenAI(
+    key: string,
+    prompt: { system: string; userText: string },
+  ): Promise<{ reply: string; action?: AssistantAction }> {
+    const model = (await this.integrations.get('openai', 'OPENAI_MODEL'))?.trim() || 'gpt-4o-mini';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.6,
+          max_tokens: 180,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: `${prompt.system} Reply with a JSON object only: {"reply":"...","action":{"type":"none|search|add_stop|remove_stop|set_route_style|start_navigation","query":"...","routeStyle":"..."}}. Omit query and routeStyle when unused.`,
+            },
+            { role: 'user', content: prompt.userText },
+          ],
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`OpenAI ${res.status}: ${text.slice(0, 200)}`);
+      }
+      const data = (await res.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const raw = data.choices?.[0]?.message?.content ?? '{}';
+      const parsed = JSON.parse(raw) as { reply?: string; action?: AssistantAction };
+      return {
+        reply: parsed.reply ?? "I'm here — where would you like to go?",
+        action: parsed.action ?? { type: 'none' },
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async callGemini(
+    key: string,
+    prompt: { system: string; userText: string },
+  ): Promise<{ reply: string; action?: AssistantAction }> {
+    const configured = await this.integrations.get('gemini', 'GEMINI_MODEL');
+    const models = geminiModelsToTry(configured);
+    let lastError = 'Gemini request failed';
+
+    for (const model of models) {
+      try {
+        return await this.requestGemini(key, model, prompt);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        const missing = lastError.includes('404') || lastError.toLowerCase().includes('no longer available');
+        if (!missing) throw error;
+        this.logger.warn('Gemini model unavailable, trying the next one', { model, message: lastError });
+      }
+    }
+
+    throw new Error(lastError);
+  }
+
+  private async requestGemini(
+    key: string,
+    model: string,
+    prompt: { system: string; userText: string },
+  ): Promise<{ reply: string; action?: AssistantAction }> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+    const { system, userText } = prompt;
 
     const body = {
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: userText }] }],
       generationConfig: {
-        temperature: 0.85,
+        temperature: 0.6,
+        maxOutputTokens: 120,
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
@@ -281,7 +377,7 @@ export class AssistantService {
     };
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), 8000);
     try {
       const res = await fetch(url, {
         method: 'POST',

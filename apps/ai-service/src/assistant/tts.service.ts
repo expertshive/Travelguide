@@ -4,79 +4,64 @@ import { createLogger } from '@traveler-guide/logger';
 
 export type Gender = 'male' | 'female';
 
-/**
- * Premade multilingual voices. Rachel/Adam were English-first and mangled
- * Hindi and Urdu even when multilingual_v2 was selected.
- */
+/** Gemini prebuilt voices. Kore / Charon read naturally in the car. */
 const DEFAULT_VOICE: Record<Gender, string> = {
-  female: '9BWtsMINqrJLrRacOk9x', // Aria
-  male: 'IKne3meq5aSn9XLyUdCD', // Charlie
+  female: 'Kore',
+  male: 'Charon',
 };
 
-/** Legacy English premades — skip for Indic so pronunciation can actually land. */
-const ENGLISH_CENTRIC_VOICES = new Set([
-  '21m00Tcm4TlvDq8ikWAM', // Rachel
-  'pNInz6obpgDQGcFmaJgB', // Adam
-  'AZnzlk1XvdvUeBnXmlld', // Domi
-  'ErXwobaYiN019PkySvjV', // Antoni
-  'MF3mGyEYCl7XYWbV9V6O', // Elli
-  'TxGEqnHWrfWFTfGW9XjX', // Josh
-  'VR6AewLTigWG4xSOukaG', // Arnold
-  'yoZ06aMxZJJ28mfd3POQ', // Sam
-]);
+const TTS_MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-tts'];
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  ar: 'Arabic',
+  ur: 'Urdu',
+  hi: 'Hindi',
+  fr: 'French',
+  es: 'Spanish',
+  tr: 'Turkish',
+};
 
 function isoLanguage(language?: string): string | undefined {
   const code = language?.split('-')[0]?.toLowerCase();
   return code || undefined;
 }
 
-function needsIndicModel(lang?: string): boolean {
-  return lang === 'ur' || lang === 'hi';
+function languageName(lang?: string): string {
+  return (lang && LANGUAGE_NAMES[lang]) || 'English';
 }
 
-const DEFAULT_MODEL = 'eleven_v3';
-const LEGACY_MODEL = 'eleven_multilingual_v2';
-
-/** language_code is ignored by multilingual_v2, which is why Urdu/Hindi sounded garbled. */
-function modelsToTry(lang: string | undefined, configured?: string): string[] {
-  const models: string[] = [];
-  const push = (id: string) => {
-    if (id && !models.includes(id)) models.push(id);
-  };
-
-  const preferred =
-    configured && configured !== LEGACY_MODEL ? configured : DEFAULT_MODEL;
-
-  if (needsIndicModel(lang)) {
-    push(preferred);
-    push(DEFAULT_MODEL);
-    push('eleven_flash_v2_5');
-    return models;
-  }
-
-  push(preferred);
-  push(DEFAULT_MODEL);
-  push('eleven_flash_v2_5');
-  return models;
+function isGeminiVoice(name?: string): boolean {
+  return Boolean(name && /^[A-Za-z]{3,24}$/.test(name) && !/^[0-9A-Fa-f-]{16,}$/.test(name));
 }
 
-function pickVoice(
-  gender: Gender,
-  lang: string | undefined,
-  configured?: string,
-  override?: string,
-): string {
-  if (override) return override;
-  if (configured && !(needsIndicModel(lang) && ENGLISH_CENTRIC_VOICES.has(configured))) {
-    return configured;
-  }
-  return DEFAULT_VOICE[gender];
+function pcmToWav(pcm: Buffer, sampleRate = 24000): Buffer {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+function sampleRateFromMime(mime?: string): number {
+  const match = mime?.match(/rate=(\d+)/i);
+  const rate = match ? Number(match[1]) : 24000;
+  return Number.isFinite(rate) && rate > 0 ? rate : 24000;
 }
 
 /**
- * Text-to-speech via ElevenLabs. The key stays server-side; the mobile app
- * requests audio and plays it. Returns `audio: null` when no key is configured
- * (or on failure) so the client can fall back to the device voice.
+ * Text-to-speech via Gemini. Uses the same API key as the chat model.
+ * Returns WAV so the phone can play it; null means fall back to device TTS.
  */
 @Injectable()
 export class TtsService {
@@ -85,7 +70,7 @@ export class TtsService {
   constructor(private readonly integrations: IntegrationResolver) {}
 
   async configured(): Promise<boolean> {
-    return Boolean(await this.integrations.get('elevenlabs', 'ELEVENLABS_API_KEY'));
+    return Boolean(await this.integrations.get('gemini', 'GEMINI_API_KEY'));
   }
 
   async synthesize(
@@ -95,82 +80,79 @@ export class TtsService {
     language?: string,
   ): Promise<{ audio: string | null; mime: string; voiceId: string | null }> {
     const clipped = text.trim().slice(0, 1200);
-    const key = await this.integrations.get('elevenlabs', 'ELEVENLABS_API_KEY');
-    if (!key || !clipped) return { audio: null, mime: 'audio/mpeg', voiceId: null };
+    const key = await this.integrations.get('gemini', 'GEMINI_API_KEY');
+    if (!key || !clipped) return { audio: null, mime: 'audio/wav', voiceId: null };
 
     const lang = isoLanguage(language);
-    const configuredVoice = await this.integrations.get(
-      'elevenlabs',
-      gender === 'male' ? 'ELEVENLABS_VOICE_MALE' : 'ELEVENLABS_VOICE_FEMALE',
-    );
-    const configuredModel = await this.integrations.get('elevenlabs', 'ELEVENLABS_MODEL');
-    const voice = pickVoice(gender, lang, configuredVoice || undefined, voiceId);
-    const models = modelsToTry(lang, configuredModel || undefined);
+    const voice = isGeminiVoice(voiceId) ? voiceId! : DEFAULT_VOICE[gender];
 
-    for (const model of models) {
-      const audio = await this.requestSpeech(key, voice, clipped, model, lang);
-      if (audio) return { audio, mime: 'audio/mpeg', voiceId: voice };
+    for (const model of TTS_MODELS) {
+      const audio = await this.requestSpeech(key, model, clipped, voice, lang);
+      if (audio) return { audio, mime: 'audio/wav', voiceId: voice };
     }
 
-    return { audio: null, mime: 'audio/mpeg', voiceId: voice };
+    return { audio: null, mime: 'audio/wav', voiceId: voice };
   }
 
   private async requestSpeech(
     key: string,
-    voice: string,
-    text: string,
     model: string,
+    text: string,
+    voice: string,
     lang?: string,
   ): Promise<string | null> {
+    const hint = lang ? ` It is ${languageName(lang)}.` : '';
+    const spoken = `Speak this text in its own language like a warm friend in the passenger seat.${hint} If it is Urdu, Hindi, or Arabic, pronounce it natively. Recite exactly, add no extra words: ${text}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), model === 'eleven_v3' ? 40000 : 25000);
-    const body: Record<string, unknown> = {
-      text,
-      model_id: model,
-      apply_text_normalization: 'on',
-      voice_settings: {
-        // Lower stability + a bit of style reads like a person, not a GPS.
-        stability: needsIndicModel(lang) ? 0.38 : 0.32,
-        similarity_boost: 0.8,
-        style: needsIndicModel(lang) ? 0.25 : 0.42,
-        use_speaker_boost: true,
-        speed: needsIndicModel(lang) ? 0.94 : 0.98,
-      },
-    };
-    // Not supported on multilingual_v2; required for Hindi/Urdu on v3 / flash.
-    if (lang && model !== LEGACY_MODEL) {
-      body.language_code = lang;
-    }
+    const timer = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const res = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,
-        {
-          method: 'POST',
-          headers: {
-            'xi-api-key': key,
-            'Content-Type': 'application/json',
-            Accept: 'audio/mpeg',
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: spoken }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: voice },
+              },
+            },
           },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        },
-      );
+        }),
+      });
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
-        this.logger.warn('ElevenLabs TTS failed', {
+        this.logger.warn('Gemini TTS failed', {
           status: res.status,
           model,
+          voice,
           language: lang,
           detail: detail.slice(0, 240),
         });
         return null;
       }
-      const buf = Buffer.from(await res.arrayBuffer());
-      return buf.toString('base64');
+      const data = (await res.json()) as {
+        candidates?: {
+          content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] };
+        }[];
+      };
+      const inline = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+      if (!inline?.data) return null;
+
+      const raw = Buffer.from(inline.data, 'base64');
+      const mime = inline.mimeType ?? '';
+      if (mime.includes('wav') || raw.subarray(0, 4).toString() === 'RIFF') {
+        return raw.toString('base64');
+      }
+      return pcmToWav(raw, sampleRateFromMime(mime)).toString('base64');
     } catch (error) {
-      this.logger.error('ElevenLabs TTS error', {
+      this.logger.error('Gemini TTS error', {
         model,
+        voice,
         language: lang,
         message: error instanceof Error ? error.message : String(error),
       });

@@ -15,7 +15,7 @@ class TtsRequestDto {
   @IsIn(['male', 'female'])
   gender?: Gender;
 
-  @ApiPropertyOptional({ description: 'Override the ElevenLabs voice id.' })
+  @ApiPropertyOptional({ description: 'Override the Gemini prebuilt voice name (e.g. Kore, Charon).' })
   @IsOptional()
   @IsString()
   voiceId?: string;
@@ -35,7 +35,7 @@ export class TtsController {
   constructor(private readonly tts: TtsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Synthesize speech (ElevenLabs). Returns base64 audio or null.' })
+  @ApiOperation({ summary: 'Synthesize speech (Gemini TTS). Returns base64 WAV or null.' })
   speak(@Body() dto: TtsRequestDto) {
     return this.tts.synthesize(dto.text, dto.gender ?? 'female', dto.voiceId, dto.language);
   }

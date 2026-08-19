@@ -134,6 +134,33 @@ async function probeElevenLabs(values: ProbeValues): Promise<ProbeOutcome> {
   }
 }
 
+async function probeOpenAI(values: ProbeValues): Promise<ProbeOutcome> {
+  const key = values.OPENAI_API_KEY;
+  if (!key) return { ok: false, message: 'No API key is configured.' };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    });
+    if (response.ok) {
+      const model = values.OPENAI_MODEL?.trim();
+      return {
+        ok: true,
+        message: model ? `Key is valid. Chat will use ${model}.` : 'Key is valid.',
+      };
+    }
+    if (response.status === 401) return { ok: false, message: 'OpenAI rejected the key (401).' };
+    if (response.status === 429) return { ok: false, message: 'OpenAI rate limit reached (429).' };
+    const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+    return { ok: false, message: body?.error?.message ?? `OpenAI responded ${response.status}.` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function probeOpenMeteo(): Promise<ProbeOutcome> {
   const { status, body } = await getJson(
     'https://api.open-meteo.com/v1/forecast?latitude=24.71&longitude=46.67&current=temperature_2m',
@@ -149,6 +176,7 @@ const PROBES: Record<string, Probe> = {
   google_maps: probeGoogleMaps,
   mapbox: probeMapbox,
   gemini: probeGemini,
+  openai: probeOpenAI,
   elevenlabs: probeElevenLabs,
   open_meteo: probeOpenMeteo,
 };
