@@ -7,7 +7,7 @@ import { PermissionsAndroid, Platform } from 'react-native';
 export type VoiceHandlers = {
   onResult: (text: string) => void;
   onEnd?: () => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, code?: string) => void;
 };
 
 const ANDROID_SPEECH_ERRORS: Record<string, string> = {
@@ -15,7 +15,7 @@ const ANDROID_SPEECH_ERRORS: Record<string, string> = {
   '2': 'Speech needs a network connection. Try again.',
   '3': 'Could not hear the microphone.',
   '4': 'Speech service error. Try again.',
-  '5': 'Could not start the microphone. Close other apps using it and retry.',
+  '5': 'The speaker was still finishing. Tap the mic again.',
   '6': 'I did not hear anything. Tap the mic and speak again.',
   '7': 'I did not catch that. Tap the mic and try again.',
   '8': 'Speech is busy. Wait a moment and tap the mic again.',
@@ -61,10 +61,11 @@ export function bindVoice(handlers: VoiceHandlers): void {
   };
   Voice.onSpeechError = (e: SpeechErrorEvent) => {
     const raw = e.error?.message ?? '';
+    const code = raw.match(/^(\d+)/)?.[1];
     if (raw.startsWith('10') || raw.includes('10/')) {
       speechCooldownUntil = Date.now() + 8000;
     }
-    handlers.onError?.(speechErrorMessage(raw));
+    handlers.onError?.(speechErrorMessage(raw), code);
   };
   Voice.onSpeechEnd = () => {
     const text = last;
@@ -104,20 +105,25 @@ export async function startVoice(locale = 'en-US'): Promise<void> {
 
   startLock = true;
   try {
+    try {
+      await Voice.cancel();
+    } catch {
+      /* idle */
+    }
+    await delay(150);
     await Voice.start(recognitionLocale(locale), {
       EXTRA_LANGUAGE_MODEL: 'LANGUAGE_MODEL_FREE_FORM',
       EXTRA_PARTIAL_RESULTS: true,
       EXTRA_PREFER_OFFLINE: false,
       REQUEST_PERMISSIONS_AUTO: true,
       EXTRA_MAX_RESULTS: 3,
-      // Give the traveler time to speak a full sentence, not a keyword.
       EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 1500,
       EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1800,
       EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1500,
     });
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
-    if (raw.startsWith('10') || raw.includes('too many')) {
+    if (raw.startsWith('10') || raw.toLowerCase().includes('too many')) {
       speechCooldownUntil = Date.now() + 8000;
       throw new Error(ANDROID_SPEECH_ERRORS['10']);
     }

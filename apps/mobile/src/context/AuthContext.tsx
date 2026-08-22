@@ -37,7 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshProfile()
-      .catch(() => setUser(null))
+      .catch(async () => {
+        try {
+          await authApi.refreshTokens();
+          await refreshProfile();
+        } catch {
+          await authApi.logout().catch(() => {});
+          setUser(null);
+        }
+      })
       .finally(() => setLoading(false));
   }, [refreshProfile]);
 

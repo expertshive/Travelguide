@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { HealthCheck, HealthCheckService, MemoryHealthIndicator } from '@nestjs/terminus';
+import { Public } from '../auth/public.decorator';
 
 @ApiTags('Health')
 @Controller('health')
@@ -10,6 +11,7 @@ export class HealthController {
     private memory: MemoryHealthIndicator,
   ) {}
 
+  @Public()
   @Get()
   @HealthCheck()
   @ApiOperation({ summary: 'Service health check' })

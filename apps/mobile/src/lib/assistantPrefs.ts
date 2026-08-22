@@ -72,6 +72,8 @@ type SpokenPack = {
   offRoute: string;
   arrived: (place: string) => string;
   adding: (place: string) => string;
+  goingTo: (place: string) => string;
+  notFoundPlace: (query: string) => string;
   nearby: (category: string, place: string, distance: string) => string;
   nearest: (category: string, place: string, distance: string) => string;
   noneNearby: (category: string) => string;
@@ -98,6 +100,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: "You're off the route. I'll keep guiding you back.",
     arrived: (place) => `You have arrived at ${place}.`,
     adding: (place) => `Great — adding ${place} to your route.`,
+    goingTo: (place) => `Okay, ${place} is your destination.`,
+    notFoundPlace: (query) => `I couldn't find ${query}. Try another name.`,
     nearby: (category, place, distance) =>
       `There's a famous place nearby — ${place}, about ${distance} away. Would you like to stop there?`,
     nearest: (category, place, distance) =>
@@ -125,6 +129,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: 'خرجت عن المسار. سأعيد توجيهك.',
     arrived: (place) => `لقد وصلت إلى ${place}.`,
     adding: (place) => `حسناً — أضيف ${place} إلى مسارك.`,
+    goingTo: (place) => `حسناً، وجهتك هي ${place}.`,
+    notFoundPlace: (query) => `لم أجد ${query}. جرّب اسماً آخر.`,
     nearby: (category, place, distance) =>
       `هناك مكان شهير قريب — ${place}، على بعد حوالي ${distance}. هل تريد التوقف هناك؟`,
     nearest: (category, place, distance) =>
@@ -151,6 +157,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: 'آپ راستے سے ہٹ گئے ہیں۔ میں واپس رہنمائی کروں گا۔',
     arrived: (place) => `آپ ${place} پہنچ گئے ہیں۔`,
     adding: (place) => `ٹھیک ہے — ${place} کو راستے میں شامل کر رہا ہوں۔`,
+    goingTo: (place) => `ٹھیک ہے، منزل ${place} ہے۔`,
+    notFoundPlace: (query) => `${query} نہیں ملی۔ دوسرا نام آزمائیں۔`,
     nearby: (category, place, distance) =>
       `قریب ایک مشہور جگہ ہے — ${place}، تقریباً ${distance} دور۔ کیا وہاں رکو گے؟`,
     nearest: (category, place, distance) =>
@@ -177,6 +185,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: 'आप मार्ग से हट गए हैं। मैं वापस गाइड करूँगा।',
     arrived: (place) => `आप ${place} पहुँच गए हैं।`,
     adding: (place) => `ठीक है — ${place} को रास्ते में जोड़ रहा हूँ।`,
+    goingTo: (place) => `ठीक है, मंज़िल ${place} है।`,
+    notFoundPlace: (query) => `${query} नहीं मिला। कोई और नाम आज़माएँ।`,
     nearby: (category, place, distance) =>
       `पास में एक प्रसिद्ध जगह है — ${place}, लगभग ${distance} दूर। क्या वहाँ रुकना है?`,
     nearest: (category, place, distance) =>
@@ -203,6 +213,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: 'Vous avez quitté l’itinéraire. Je vous ramène.',
     arrived: (place) => `Vous êtes arrivé à ${place}.`,
     adding: (place) => `Parfait — j’ajoute ${place} à l’itinéraire.`,
+    goingTo: (place) => `D’accord, destination ${place}.`,
+    notFoundPlace: (query) => `Je n’ai pas trouvé ${query}. Essaie un autre nom.`,
     nearby: (category, place, distance) =>
       `Il y a un lieu célèbre à proximité — ${place}, à environ ${distance}. On s’arrête ?`,
     nearest: (category, place, distance) =>
@@ -229,6 +241,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: 'Te has salido de la ruta. Te voy a guiar de vuelta.',
     arrived: (place) => `Has llegado a ${place}.`,
     adding: (place) => `Perfecto — añado ${place} a tu ruta.`,
+    goingTo: (place) => `Vale, destino ${place}.`,
+    notFoundPlace: (query) => `No encontré ${query}. Prueba otro nombre.`,
     nearby: (category, place, distance) =>
       `Hay un lugar famoso cerca — ${place}, a unos ${distance}. ¿Quieres parar?`,
     nearest: (category, place, distance) =>
@@ -255,6 +269,8 @@ const COPY: Record<AssistantLanguage, SpokenPack> = {
     offRoute: 'Rotadan çıktın. Seni geri yönlendireceğim.',
     arrived: (place) => `${place} noktasına vardın.`,
     adding: (place) => `Tamam — ${place} rotaya ekleniyor.`,
+    goingTo: (place) => `Tamam, varış ${place}.`,
+    notFoundPlace: (query) => `${query} bulunamadı. Başka bir ad dene.`,
     nearby: (category, place, distance) =>
       `Yakında ünlü bir yer var — ${place}, yaklaşık ${distance}. Durmak ister misin?`,
     nearest: (category, place, distance) =>

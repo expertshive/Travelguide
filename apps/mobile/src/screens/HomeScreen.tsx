@@ -1,7 +1,16 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { formatDistance, formatDuration } from '../lib/geo';
 import {
   listRecentSearches,
   listSavedPlaces,
@@ -9,13 +18,13 @@ import {
   type SavedPlace,
 } from '../lib/map';
 import { getMyProfile, resolveMediaUrl } from '../lib/profile';
+import { listPastTrips, type SavedTrip } from '../lib/trips';
 import type { TabScreenProps } from '../navigation/types';
 import {
   Avatar,
   Card,
   Gradient,
   Icon,
-  IconButton,
   Txt,
   colors,
   radius,
@@ -27,8 +36,8 @@ type Props = TabScreenProps<'Home'>;
 type IconType = (p: { color?: string; size?: number }) => React.ReactElement;
 
 const CATEGORIES = [
-  { label: 'Restaurants', query: 'restaurant', grad: 'sunset' as const, icon: Icon.FoodIcon },
-  { label: 'Hotels', query: 'hotel', grad: 'ocean' as const, icon: Icon.HotelIcon },
+  { label: 'Eat', query: 'restaurant', grad: 'sunset' as const, icon: Icon.FoodIcon },
+  { label: 'Stay', query: 'hotel', grad: 'ocean' as const, icon: Icon.HotelIcon },
   { label: 'Coffee', query: 'cafe', grad: 'brand' as const, icon: Icon.CafeIcon },
   { label: 'Fuel', query: 'gas station', grad: 'night' as const, icon: Icon.FuelIcon },
 ];
@@ -44,6 +53,12 @@ function greeting() {
   if (h < 12) return 'Good morning';
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
+}
+
+function placeTitle(place: SavedPlace) {
+  if (place.label === 'HOME') return 'Home';
+  if (place.label === 'WORK') return 'Work';
+  return place.name;
 }
 
 function openOnMap(
@@ -63,10 +78,22 @@ function openOnMap(
 
 export function HomeScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [saved, setSaved] = useState<SavedPlace[]>([]);
   const [recent, setRecent] = useState<RecentSearch[]>([]);
+  const [pastTrips, setPastTrips] = useState<SavedTrip[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+
+  const pad = width < 360 ? spacing.md : spacing.xl;
+  const catSize = Math.min(72, Math.floor((width - pad * 2 - spacing.md * 3) / 4));
+  const savedWidth = Math.min(148, Math.max(124, width * 0.38));
+
+  const firstName = useMemo(
+    () => (user?.name ?? '').split(' ')[0] || 'Traveler',
+    [user?.name],
+  );
 
   function openExplore(category: string) {
     navigation.navigate('Map', { explore: category.trim() });
@@ -83,10 +110,12 @@ export function HomeScreen({ navigation }: Props) {
       Promise.all([
         listSavedPlaces().catch(() => [] as SavedPlace[]),
         listRecentSearches().catch(() => [] as RecentSearch[]),
-      ]).then(([s, r]) => {
+        listPastTrips().catch(() => [] as SavedTrip[]),
+      ]).then(([s, r, t]) => {
         if (!active) return;
         setSaved(s);
         setRecent(r);
+        setPastTrips(t);
       });
       getMyProfile()
         .then((p) => active && setAvatarUrl(resolveMediaUrl(p.avatarUrl)))
@@ -97,39 +126,27 @@ export function HomeScreen({ navigation }: Props) {
     }, []),
   );
 
-  const firstName = (user?.name ?? '').split(' ')[0] || 'Traveler';
-
   return (
     <View style={styles.root}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.scroll, { paddingBottom: 96 + insets.bottom }]}
       >
-        <Gradient name="brand" style={styles.header}>
-          {/* Decorative blobs for depth */}
-          <View style={styles.blobOne} pointerEvents="none" />
-          <View style={styles.blobTwo} pointerEvents="none" />
-
+        <Gradient
+          name="brand"
+          style={[styles.header, { paddingTop: insets.top + spacing.lg, paddingHorizontal: pad }]}
+        >
           <View style={styles.headerTop}>
-            <View style={{ flex: 1 }}>
-              <Txt variant="small" color="rgba(255,255,255,0.8)">
-                {greeting()},
+            <View style={styles.headerCopy}>
+              <Txt variant="small" color="rgba(255,255,255,0.78)">
+                {greeting()}
               </Txt>
-              <Txt variant="h2" color={colors.onPrimary} style={{ marginTop: 2 }}>
+              <Txt variant="h2" color={colors.onPrimary} numberOfLines={1}>
                 {firstName}
               </Txt>
-              <Txt variant="small" color="rgba(255,255,255,0.78)" style={{ marginTop: 4 }}>
-                Let’s plan a stop along the way
-              </Txt>
             </View>
-            <IconButton bg="rgba(255,255,255,0.16)" onPress={() => {}}>
-              <Icon.BellIcon color={colors.onPrimary} size={20} />
-            </IconButton>
-            <Pressable
-              onPress={() => navigation.navigate('Profile')}
-              style={{ marginLeft: spacing.sm }}
-            >
+            <Pressable onPress={() => navigation.navigate('Profile')} hitSlop={8}>
               <Avatar uri={avatarUrl} name={user?.name ?? user?.email} size={44} />
             </Pressable>
           </View>
@@ -139,7 +156,7 @@ export function HomeScreen({ navigation }: Props) {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Where do you want to go?"
+              placeholder="Where to?"
               placeholderTextColor={colors.textFaint}
               style={styles.searchInput}
               returnKeyType="search"
@@ -147,62 +164,30 @@ export function HomeScreen({ navigation }: Props) {
               autoCorrect={false}
               autoCapitalize="none"
             />
-            <Pressable
-              style={styles.searchGo}
-              onPress={() => openSearch(search)}
-              hitSlop={6}
-            >
+            <Pressable style={styles.searchGo} onPress={() => openSearch(search)} hitSlop={6}>
               <Icon.NavigationIcon color={colors.onPrimary} size={18} />
             </Pressable>
           </View>
         </Gradient>
 
-        <Pressable
-          style={({ pressed }) => [styles.featuredWrap, pressed && styles.pressed]}
-          onPress={() => openExplore('tourist attraction')}
-        >
-          <Gradient name="candy" style={styles.featured}>
-            <View style={styles.featBlob} pointerEvents="none" />
-            <View style={{ flex: 1 }}>
-              <Txt variant="caption" color="rgba(255,255,255,0.85)">
-                FEATURED
-              </Txt>
-              <Txt variant="h3" color={colors.onPrimary} style={{ marginTop: 4 }}>
-                Discover top attractions
-              </Txt>
-              <Txt variant="small" color="rgba(255,255,255,0.9)" style={{ marginTop: 2 }}>
-                Famous places near you — tap to open on the map
-              </Txt>
-              <View style={styles.featCta}>
-                <Txt variant="caption" color={colors.onPrimary}>
-                  EXPLORE
-                </Txt>
-                <Icon.ChevronRightIcon color={colors.onPrimary} size={14} />
-              </View>
-            </View>
-            <View style={styles.featIcon}>
-              <Icon.CompassIcon color={colors.onPrimary} size={30} />
-            </View>
-          </Gradient>
-        </Pressable>
-
-        <View style={styles.section}>
-          <Txt variant="h3" style={styles.sectionTitle}>
-            Explore nearby
-          </Txt>
+        <View style={[styles.section, { paddingHorizontal: pad, marginTop: spacing.xl }]}>
           <View style={styles.catGrid}>
             {CATEGORIES.map((c) => {
               const CatIcon = c.icon;
               return (
                 <Pressable
                   key={c.label}
-                  style={({ pressed }) => [styles.catItem, pressed && styles.pressed]}
+                  style={({ pressed }) => [
+                    styles.catItem,
+                    { width: catSize },
+                    pressed && styles.pressed,
+                  ]}
                   onPress={() => openExplore(c.query)}
                 >
-                  <Gradient name={c.grad} style={styles.catIcon}>
-                    <CatIcon color={colors.onPrimary} size={24} />
+                  <Gradient name={c.grad} style={[styles.catIcon, { width: catSize, height: catSize }]}>
+                    <CatIcon color={colors.onPrimary} size={Math.round(catSize * 0.36)} />
                   </Gradient>
-                  <Txt variant="small" center numberOfLines={1} style={styles.catLabel}>
+                  <Txt variant="caption" center numberOfLines={1} style={styles.catLabel}>
                     {c.label}
                   </Txt>
                 </Pressable>
@@ -211,28 +196,27 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Txt variant="h3">Saved places</Txt>
-            <Pressable onPress={() => navigation.navigate('Saved')}>
-              <Txt variant="small" color={colors.primary}>
-                See all
-              </Txt>
-            </Pressable>
-          </View>
-
-          {saved.length ? (
+        {saved.length ? (
+          <View style={[styles.section, { paddingHorizontal: pad }]}>
+            <View style={styles.sectionHead}>
+              <Txt variant="title">Saved</Txt>
+              <Pressable onPress={() => navigation.navigate('Saved')} hitSlop={8}>
+                <Txt variant="small" color={colors.primary}>
+                  See all
+                </Txt>
+              </Pressable>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.savedRow}
+              contentContainerStyle={styles.hRow}
             >
-              {saved.map((place) => {
+              {saved.slice(0, 8).map((place) => {
                 const PIcon = PLACE_ICON[place.label] ?? Icon.MapPinIcon;
                 return (
                   <Pressable
                     key={place.id}
-                    style={styles.savedCard}
+                    style={[styles.savedCard, { width: savedWidth }]}
                     onPress={() =>
                       openOnMap(navigation, {
                         id: place.id,
@@ -244,14 +228,10 @@ export function HomeScreen({ navigation }: Props) {
                     }
                   >
                     <View style={styles.savedIcon}>
-                      <PIcon color={colors.primary} size={20} />
+                      <PIcon color={colors.primary} size={18} />
                     </View>
-                    <Txt variant="bodyStrong" numberOfLines={1} style={{ marginTop: spacing.sm }}>
-                      {place.label === 'CUSTOM'
-                        ? place.name
-                        : place.label === 'HOME'
-                          ? 'Home'
-                          : 'Work'}
+                    <Txt variant="bodyStrong" numberOfLines={1}>
+                      {placeTitle(place)}
                     </Txt>
                     <Txt variant="small" color={colors.textDim} numberOfLines={1}>
                       {place.address}
@@ -260,37 +240,65 @@ export function HomeScreen({ navigation }: Props) {
                 );
               })}
             </ScrollView>
-          ) : (
-            <Card style={styles.emptyCard} elevation="soft">
-              <View style={styles.savedIcon}>
-                <Icon.BookmarkIcon color={colors.primary} size={20} />
-              </View>
-              <Txt variant="bodyStrong" style={{ marginTop: spacing.sm }}>
-                No saved places yet
-              </Txt>
-              <Txt variant="small" color={colors.textDim} style={{ marginTop: 2 }}>
-                Search a place and save it as Home, Work, or a favourite.
-              </Txt>
-              <Pressable style={styles.emptyCta} onPress={() => navigation.navigate('Map', {})}>
-                <Icon.PlusIcon color={colors.primary} size={18} />
-                <Txt variant="small" color={colors.primary}>
-                  Add a place
-                </Txt>
-              </Pressable>
+          </View>
+        ) : null}
+
+        {pastTrips.length ? (
+          <View style={[styles.section, { paddingHorizontal: pad }]}>
+            <Txt variant="title" style={styles.sectionTitle}>
+              Past trips
+            </Txt>
+            <Card padded={false} elevation="soft">
+              {pastTrips.slice(0, 4).map((trip, i) => (
+                <Pressable
+                  key={trip.id}
+                  style={[styles.listRow, i > 0 && styles.listBorder]}
+                  onPress={() =>
+                    navigation.navigate('Map', {
+                      origin: {
+                        name: trip.originName,
+                        address: trip.originAddress,
+                        latitude: trip.originLatitude,
+                        longitude: trip.originLongitude,
+                      },
+                      destination: {
+                        id: trip.id,
+                        name: trip.destinationName,
+                        address: trip.destinationAddress,
+                        latitude: trip.destinationLatitude,
+                        longitude: trip.destinationLongitude,
+                      },
+                      tripId: Date.parse(trip.endedAt) || Date.now(),
+                    })
+                  }
+                >
+                  <View style={styles.listIcon}>
+                    <Icon.RouteIcon color={colors.primary} size={18} />
+                  </View>
+                  <View style={styles.listCopy}>
+                    <Txt variant="bodyStrong" numberOfLines={1}>
+                      {trip.destinationName}
+                    </Txt>
+                    <Txt variant="small" color={colors.textDim} numberOfLines={1}>
+                      {formatDuration(trip.durationSeconds)} · {formatDistance(trip.distanceMeters)}
+                    </Txt>
+                  </View>
+                </Pressable>
+              ))}
             </Card>
-          )}
-        </View>
+          </View>
+        ) : null}
 
         {recent.length ? (
-          <View style={styles.section}>
-            <Txt variant="h3" style={styles.sectionTitle}>
+          <View style={[styles.section, { paddingHorizontal: pad }]}>
+            <Txt variant="title" style={styles.sectionTitle}>
               Recent
             </Txt>
             <Card padded={false} elevation="soft">
-              {recent.slice(0, 6).map((r, i) => (
+              {recent.slice(0, 4).map((r, i) => (
                 <Pressable
                   key={r.id}
-                  style={[styles.recentRow, i > 0 && styles.recentBorderTop]}
+                  style={[styles.listRow, i > 0 && styles.listBorder]}
                   onPress={() =>
                     openOnMap(navigation, {
                       name: r.name,
@@ -300,10 +308,10 @@ export function HomeScreen({ navigation }: Props) {
                     })
                   }
                 >
-                  <View style={styles.recentIcon}>
-                    <Icon.ClockIcon color={colors.textDim} size={18} />
+                  <View style={[styles.listIcon, styles.recentIcon]}>
+                    <Icon.ClockIcon color={colors.textDim} size={16} />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.listCopy}>
                     <Txt variant="bodyStrong" numberOfLines={1}>
                       {r.name}
                     </Txt>
@@ -311,26 +319,11 @@ export function HomeScreen({ navigation }: Props) {
                       {r.address}
                     </Txt>
                   </View>
-                  <Icon.ChevronRightIcon color={colors.textFaint} size={18} />
                 </Pressable>
               ))}
             </Card>
           </View>
         ) : null}
-
-        <View style={[styles.section, { marginTop: spacing.lg }]}>
-          <Card elevation="soft" style={styles.tipRow}>
-            <View style={styles.tipIcon}>
-              <Icon.NavigationIcon color={colors.teal} size={20} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Txt variant="bodyStrong">Start, stops, and destination live on the map</Txt>
-              <Txt variant="small" color={colors.textDim}>
-                Open Map, allow location, then add stops before you start the trip.
-              </Txt>
-            </View>
-          </Card>
-        </View>
       </ScrollView>
     </View>
   );
@@ -338,42 +331,27 @@ export function HomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  scroll: { paddingBottom: 120 },
+  scroll: { flexGrow: 1 },
 
   header: {
-    paddingTop: spacing.xxxl + spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
-    borderBottomLeftRadius: radius.xl + 6,
-    borderBottomRightRadius: radius.xl + 6,
+    paddingBottom: spacing.xl,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
     overflow: 'hidden',
   },
-  blobOne: {
-    position: 'absolute',
-    top: -60,
-    right: -40,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  blobTwo: {
-    position: 'absolute',
-    bottom: -50,
-    left: -30,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  headerTop: { flexDirection: 'row', alignItems: 'center' },
+  headerCopy: { flex: 1, minWidth: 0 },
   searchBar: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+    borderRadius: radius.pill,
     paddingLeft: spacing.lg,
     paddingRight: 6,
-    paddingVertical: 6,
+    paddingVertical: 5,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -381,134 +359,78 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 44,
+    minWidth: 0,
+    height: 42,
     color: colors.text,
     fontSize: 16,
     paddingVertical: 0,
   },
   searchGo: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+    width: 42,
+    height: 42,
+    borderRadius: radius.pill,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.97 }] },
 
-  featuredWrap: { marginHorizontal: spacing.xl, marginTop: spacing.xl },
-  featured: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.xl,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    ...shadow.lifted,
-  },
-  featBlob: {
-    position: 'absolute',
-    top: -30,
-    right: -20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  featCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  featIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  section: { paddingHorizontal: spacing.xl, marginTop: spacing.xxl },
-  sectionTitle: { marginBottom: spacing.md },
+  section: { marginTop: spacing.xl },
+  sectionTitle: { marginBottom: spacing.sm },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
 
-  catGrid: { flexDirection: 'row', gap: spacing.md },
-  catItem: { flex: 1, alignItems: 'center' },
+  catGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  catItem: { alignItems: 'center' },
   catIcon: {
-    width: '100%',
-    maxWidth: 70,
-    aspectRatio: 1,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow.soft,
   },
-  catLabel: { marginTop: 8, width: '100%' },
+  catLabel: { marginTop: 8, width: '100%', color: colors.textDim },
 
-  savedRow: { gap: spacing.md, paddingRight: spacing.xl },
+  hRow: { gap: spacing.md, paddingRight: spacing.sm },
   savedCard: {
-    width: 160,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.lg,
+    padding: spacing.md,
     ...shadow.soft,
   },
   savedIcon: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  listIcon: {
+    width: 34,
+    height: 34,
     borderRadius: radius.sm,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  recentIcon: { backgroundColor: colors.surfaceAlt },
 
-  emptyCard: { alignItems: 'flex-start' },
-  emptyCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-  },
-
-  recentRow: {
+  listRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
-  recentBorderTop: { borderTopWidth: 1, borderTopColor: colors.border },
-  recentIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  tipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  tipIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    backgroundColor: colors.tealSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  listBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  listCopy: { flex: 1, minWidth: 0 },
 });

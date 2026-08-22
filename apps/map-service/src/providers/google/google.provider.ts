@@ -220,6 +220,62 @@ export class GoogleProvider
     };
   }
 
+  /**
+   * Nearby search biased to historical / cultural sites. One type/keyword call
+   * per sample point — the heritage service de-dupes across the route.
+   */
+  async nearbyHistoric(center: LatLng, radiusMeters: number): Promise<Place[]> {
+    if (!isValidLatLng(center)) return [];
+    const params = new URLSearchParams({
+      location: `${center.latitude},${center.longitude}`,
+      radius: String(Math.min(50_000, Math.max(200, Math.round(radiusMeters)))),
+      keyword: 'historic heritage temple mosque church fort museum archaeological monument palace tomb',
+      key: await this.key(),
+    });
+    const body = await this.request<{ status?: string; results?: GooglePlace[] }>(
+      `${API_BASE}/place/nearbysearch/json?${params}`,
+      'geocode.nearbyHistoric',
+    );
+    this.assertStatus(body.status, 'geocode.nearbyHistoric', { allowZeroResults: true });
+    return (body.results ?? [])
+      .map((place) => this.toPlace(place, center))
+      .filter((place): place is Place => place !== null);
+  }
+
+  async placeDetails(placeId: string): Promise<{
+    businessStatus: string | null;
+    openNow: boolean | null;
+    weekdayText: string[];
+    types: string[];
+    website: string | null;
+  } | null> {
+    const id = placeId.replace(/^google:/, '');
+    const params = new URLSearchParams({
+      place_id: id,
+      fields: 'business_status,opening_hours,types,website',
+      key: await this.key(),
+    });
+    const body = await this.request<{
+      status?: string;
+      result?: {
+        business_status?: string;
+        opening_hours?: { open_now?: boolean; weekday_text?: string[] };
+        types?: string[];
+        website?: string;
+      };
+    }>(`${API_BASE}/place/details/json?${params}`, 'geocode.placeDetails');
+    this.assertStatus(body.status, 'geocode.placeDetails', { allowZeroResults: true });
+    const result = body.result;
+    if (!result) return null;
+    return {
+      businessStatus: result.business_status ?? null,
+      openNow: typeof result.opening_hours?.open_now === 'boolean' ? result.opening_hours.open_now : null,
+      weekdayText: result.opening_hours?.weekday_text ?? [],
+      types: result.types ?? [],
+      website: result.website ?? null,
+    };
+  }
+
   private toRoute(route: GoogleRoute, index: number, preference: string): Route {
     const geometry = route.overview_polyline?.points
       ? decodePolyline(route.overview_polyline.points, 5)

@@ -3,6 +3,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { askAssistant, type AssistantAction, type AssistantContext } from '../lib/assistant';
 import type { Place } from '../lib/map';
+import { destinationFromUtterance } from '../lib/placeIntent';
+import { heritageCommand, type HeritageVoiceCmd } from '../lib/heritageIntent';
 import { isAssistantLanguage, spokenCopy, type AssistantLanguage } from '../lib/assistantPrefs';
 import { speak, stopSpeaking } from '../lib/tts';
 import {
@@ -23,6 +25,9 @@ type Props = {
   onClose: () => void;
   /** Apply an action the user confirmed (or that needs no confirmation). */
   onAction: (action: AssistantAction) => void;
+  /** Search a spoken place name and make it the trip destination. */
+  onSetDestination?: (query: string) => Promise<{ name: string } | null>;
+  onHeritageCommand?: (cmd: HeritageVoiceCmd) => void;
   /** Show a map card for the nearest restaurant / rest area the traveler asked for. */
   onSuggestStop?: (item: { place: Place; category: string; meters: number }) => void;
 };
@@ -45,6 +50,8 @@ function actionLabel(a: AssistantAction): string | null {
   switch (a.type) {
     case 'add_stop':
       return `Add a stop${a.query ? `: ${a.query}` : ''}`;
+    case 'set_destination':
+      return `Set destination${a.query ? ` to ${a.query}` : ''}`;
     case 'remove_stop':
       return 'Remove the current stop';
     case 'set_route_style':
@@ -56,7 +63,15 @@ function actionLabel(a: AssistantAction): string | null {
   }
 }
 
-export function AssistantSheet({ context, persona, onClose, onAction, onSuggestStop }: Props) {
+export function AssistantSheet({
+  context,
+  persona,
+  onClose,
+  onAction,
+  onSetDestination,
+  onHeritageCommand,
+  onSuggestStop,
+}: Props) {
   const assistantName = persona?.name || 'Travel Assistant';
   const langCode = persona?.language;
   const locale: AssistantLanguage = isAssistantLanguage(langCode) ? langCode : 'en-US';
@@ -95,23 +110,57 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
         }
       }
       setTurns((t) => [...t, { role: 'user', text: message }]);
+      if (context.pendingHeritage && onHeritageCommand) {
+        const hcmd = heritageCommand(message);
+        if (hcmd) {
+          onHeritageCommand(hcmd);
+          const ack =
+            hcmd.type === 'skip'
+              ? 'Skipping it.'
+              : hcmd.type === 'mute'
+                ? "I won't mention historical places."
+                : hcmd.type === 'more'
+                  ? 'A little more history…'
+                  : copy.okay;
+          setTurns((t) => [...t, { role: 'assistant', text: ack }]);
+          return;
+        }
+      }
+      const destQuery = destinationFromUtterance(message);
+      if (destQuery && onSetDestination) {
+        setThinking(true);
+        try {
+          const place = await onSetDestination(destQuery);
+          const reply = place ? copy.goingTo(place.name) : copy.notFoundPlace(destQuery);
+          setTurns((t) => [...t, { role: 'assistant', text: reply }]);
+          void speak(reply);
+        } catch {
+          const reply = copy.notFoundPlace(destQuery);
+          setTurns((t) => [...t, { role: 'assistant', text: reply }]);
+          void speak(reply);
+        } finally {
+          setThinking(false);
+        }
+        return;
+      }
       setThinking(true);
       try {
         const result = await askAssistant(message, context);
         setTurns((t) => [...t, { role: 'assistant', text: result.reply }]);
-        void speak(result.reply);
         const action = result.action;
+        let spoken = result.reply;
         if (action && action.type !== 'none') {
           if (action.requiresConfirmation) {
             setPending(action);
             const label = actionLabel(action);
             if (label && !/\?\s*$/.test(result.reply.trim())) {
-              void speak(copy.confirmAsk(label));
+              spoken = `${result.reply} ${copy.confirmAsk(label)}`;
             }
           } else {
             onAction(action); // e.g. search — safe to apply immediately
           }
         }
+        void speak(spoken);
       } catch {
         const msg = "Sorry, I couldn't reach the assistant. Check the connection and try again.";
         setTurns((t) => [...t, { role: 'assistant', text: msg }]);
@@ -120,35 +169,66 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
         setThinking(false);
       }
     },
-    [context, copy, onAction],
+    [context, copy, onAction, onSetDestination, onHeritageCommand],
   );
 
   const sendRef = useRef(send);
   sendRef.current = send;
   const micBusy = useRef(false);
+  const micRetry = useRef(0);
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
 
   useEffect(() => {
     bindVoice({
       onResult: (text) => {
+        micRetry.current = 0;
         setListening(false);
         void stopVoice();
         if (text.trim()) void sendRef.current(text.trim());
       },
       onEnd: () => setListening(false),
-      onError: (message) => {
+      onError: (message, code) => {
+        if ((code === '5' || code === '8') && micRetry.current < 2) {
+          micRetry.current += 1;
+          void (async () => {
+            await delay(500 * micRetry.current);
+            try {
+              await startVoice(localeRef.current);
+            } catch (error) {
+              setListening(false);
+              setMicError(error instanceof Error ? error.message : message);
+            }
+          })();
+          return;
+        }
+        micRetry.current = 0;
         setListening(false);
-        setMicError(message);
+        setMicError(
+          code === '5' || code === '8'
+            ? 'The agent was still talking. Tap the mic again.'
+            : message,
+        );
       },
     });
     return () => {
       void destroyVoice();
-      stopSpeaking();
+      void stopSpeaking();
     };
   }, []);
 
   useEffect(() => {
-    void speak(copy.greeting(assistantName));
-  }, [assistantName, copy]);
+    let cancelled = false;
+    void (async () => {
+      await stopSpeaking();
+      if (!cancelled) await speak(copy.greeting(assistantName));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Greet once per sheet open — `copy` is a stable module object per language.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assistantName]);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
@@ -168,9 +248,8 @@ export function AssistantSheet({ context, persona, onClose, onAction, onSuggestS
         setMicError('Allow the microphone to talk to the agent.');
         return;
       }
-      stopSpeaking();
-      // Let TTS / audio release the mic before SpeechRecognizer starts.
-      await delay(500);
+      micRetry.current = 0;
+      await stopSpeaking();
       setListening(true);
       await startVoice(locale);
     } catch (error) {

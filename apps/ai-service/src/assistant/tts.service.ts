@@ -4,64 +4,34 @@ import { createLogger } from '@traveler-guide/logger';
 
 export type Gender = 'male' | 'female';
 
-/** Gemini prebuilt voices. Kore / Charon read naturally in the car. */
+/** OpenAI TTS voices — nova/shimmer read as female, onyx/echo as male. */
 const DEFAULT_VOICE: Record<Gender, string> = {
-  female: 'Kore',
-  male: 'Charon',
+  female: 'nova',
+  male: 'onyx',
 };
 
-const TTS_MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-tts'];
+const TTS_MODELS = ['gpt-4o-mini-tts', 'tts-1'];
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: 'English',
-  ar: 'Arabic',
-  ur: 'Urdu',
-  hi: 'Hindi',
-  fr: 'French',
-  es: 'Spanish',
-  tr: 'Turkish',
-};
+const OPENAI_VOICES = new Set([
+  'alloy',
+  'ash',
+  'ballad',
+  'coral',
+  'echo',
+  'fable',
+  'nova',
+  'onyx',
+  'sage',
+  'shimmer',
+]);
 
-function isoLanguage(language?: string): string | undefined {
-  const code = language?.split('-')[0]?.toLowerCase();
-  return code || undefined;
-}
-
-function languageName(lang?: string): string {
-  return (lang && LANGUAGE_NAMES[lang]) || 'English';
-}
-
-function isGeminiVoice(name?: string): boolean {
-  return Boolean(name && /^[A-Za-z]{3,24}$/.test(name) && !/^[0-9A-Fa-f-]{16,}$/.test(name));
-}
-
-function pcmToWav(pcm: Buffer, sampleRate = 24000): Buffer {
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(sampleRate * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
-}
-
-function sampleRateFromMime(mime?: string): number {
-  const match = mime?.match(/rate=(\d+)/i);
-  const rate = match ? Number(match[1]) : 24000;
-  return Number.isFinite(rate) && rate > 0 ? rate : 24000;
+function isOpenAiVoice(name?: string): boolean {
+  return Boolean(name && OPENAI_VOICES.has(name.toLowerCase()));
 }
 
 /**
- * Text-to-speech via Gemini. Uses the same API key as the chat model.
- * Returns WAV so the phone can play it; null means fall back to device TTS.
+ * Text-to-speech via OpenAI (same ChatGPT API key as the assistant).
+ * Returns MP3 so the phone can play it; null means fall back to device TTS.
  */
 @Injectable()
 export class TtsService {
@@ -70,28 +40,27 @@ export class TtsService {
   constructor(private readonly integrations: IntegrationResolver) {}
 
   async configured(): Promise<boolean> {
-    return Boolean(await this.integrations.get('gemini', 'GEMINI_API_KEY'));
+    return Boolean(await this.integrations.get('openai', 'OPENAI_API_KEY'));
   }
 
   async synthesize(
     text: string,
     gender: Gender = 'female',
     voiceId?: string,
-    language?: string,
+    _language?: string,
   ): Promise<{ audio: string | null; mime: string; voiceId: string | null }> {
     const clipped = text.trim().slice(0, 1200);
-    const key = await this.integrations.get('gemini', 'GEMINI_API_KEY');
-    if (!key || !clipped) return { audio: null, mime: 'audio/wav', voiceId: null };
+    const key = await this.integrations.get('openai', 'OPENAI_API_KEY');
+    if (!key || !clipped) return { audio: null, mime: 'audio/mpeg', voiceId: null };
 
-    const lang = isoLanguage(language);
-    const voice = isGeminiVoice(voiceId) ? voiceId! : DEFAULT_VOICE[gender];
+    const voice = isOpenAiVoice(voiceId) ? voiceId!.toLowerCase() : DEFAULT_VOICE[gender];
 
     for (const model of TTS_MODELS) {
-      const audio = await this.requestSpeech(key, model, clipped, voice, lang);
-      if (audio) return { audio, mime: 'audio/wav', voiceId: voice };
+      const audio = await this.requestSpeech(key, model, clipped, voice);
+      if (audio) return { audio, mime: 'audio/mpeg', voiceId: voice };
     }
 
-    return { audio: null, mime: 'audio/wav', voiceId: voice };
+    return { audio: null, mime: 'audio/mpeg', voiceId: voice };
   }
 
   private async requestSpeech(
@@ -99,61 +68,42 @@ export class TtsService {
     model: string,
     text: string,
     voice: string,
-    lang?: string,
   ): Promise<string | null> {
-    const hint = lang ? ` It is ${languageName(lang)}.` : '';
-    const spoken = `Speak this text in its own language like a warm friend in the passenger seat.${hint} If it is Urdu, Hindi, or Arabic, pronounce it natively. Recite exactly, add no extra words: ${text}`;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    const timer = setTimeout(() => controller.abort(), 12_000);
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
         signal: controller.signal,
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: spoken }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: voice },
-              },
-            },
-          },
+          model,
+          voice,
+          input: text,
+          response_format: 'mp3',
         }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
-        this.logger.warn('Gemini TTS failed', {
+        this.logger.warn('OpenAI TTS failed', {
           status: res.status,
           model,
           voice,
-          language: lang,
           detail: detail.slice(0, 240),
         });
         return null;
       }
-      const data = (await res.json()) as {
-        candidates?: {
-          content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] };
-        }[];
-      };
-      const inline = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-      if (!inline?.data) return null;
-
-      const raw = Buffer.from(inline.data, 'base64');
-      const mime = inline.mimeType ?? '';
-      if (mime.includes('wav') || raw.subarray(0, 4).toString() === 'RIFF') {
-        return raw.toString('base64');
-      }
-      return pcmToWav(raw, sampleRateFromMime(mime)).toString('base64');
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (!buf.length) return null;
+      return buf.toString('base64');
     } catch (error) {
-      this.logger.error('Gemini TTS error', {
+      this.logger.error('OpenAI TTS error', {
         model,
         voice,
-        language: lang,
         message: error instanceof Error ? error.message : String(error),
       });
       return null;

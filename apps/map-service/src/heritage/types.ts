@@ -1,0 +1,21 @@
+export type HeritageSite = {
+  id: string;
+  name: string;
+  address: string;
+  center: { latitude: number; longitude: number };
+  category: string;
+  routeDistanceMeters: number;
+  originDistanceMeters: number | null;
+  alongIndex: number;
+  side: 'left' | 'right' | 'along';
+  visitable: boolean;
+  openNow: boolean | null;
+  hoursSummary: string | null;
+  visitMinutes: { min: number; max: number };
+  ageLabel: string | null;
+  ageSource: 'verified' | 'estimated' | 'unknown';
+  whyImportant: string;
+  story: string;
+  storyLong: string | null;
+  source: 'wikipedia' | 'maps';
+};

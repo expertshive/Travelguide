@@ -6,6 +6,7 @@ import { MapDbAdminModule } from './admin/db-admin.module';
 import { AuthModule } from './auth/auth.module';
 import { GeocodeModule } from './geocode/geocode.module';
 import { HealthController } from './health/health.controller';
+import { HeritageModule } from './heritage/heritage.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProviderModule } from './providers/provider.module';
 import { RedisModule } from './redis/redis.module';
@@ -23,6 +24,7 @@ import { UsageModule } from './usage/usage.module';
     UsageModule,
     AuthModule,
     GeocodeModule,
+    HeritageModule,
     RoutesModule,
     MapDbAdminModule,
   ],

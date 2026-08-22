@@ -51,6 +51,18 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+/** One in-flight refresh so parallel 401s do not rotate the refresh token twice. */
+let refreshLock: Promise<AuthTokens> | null = null;
+
+async function refreshSession(): Promise<AuthTokens> {
+  if (!refreshLock) {
+    refreshLock = refreshTokens().finally(() => {
+      refreshLock = null;
+    });
+  }
+  return refreshLock;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, auth = false): Promise<T> {
   const headers = new Headers(init.headers ?? {});
   // FormData must set its own Content-Type so the multipart boundary is included.
@@ -61,29 +73,41 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
   headers.set('bypass-tunnel-reminder', 'true');
   headers.set('ngrok-skip-browser-warning', 'true');
 
+  async function send(): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Could not reach the server at ${API_BASE}. Is it running?`);
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not reach the server at ${API_BASE}. ${detail}`);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   if (auth) {
     const token = await getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  // Without a deadline an unreachable host leaves the promise pending forever:
-  // a TCP connect to a dead address on the local subnet is dropped rather than
-  // refused, so the app would sit on its loading screen indefinitely instead of
-  // reporting that the backend is down.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response = await send();
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal });
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Could not reach the server at ${API_BASE}. Is it running?`);
+  // Access tokens last 15 minutes. A token minted on another host (old EC2 / LAN)
+  // also fails verify. Refresh once, then drop the session if the server still
+  // does not recognise us — the traveler must sign in on this backend.
+  if (response.status === 401 && auth && path !== '/auth/refresh') {
+    try {
+      await refreshSession();
+      const next = await getAccessToken();
+      if (next) headers.set('Authorization', `Bearer ${next}`);
+      response = await send();
+    } catch {
+      await clearTokens();
     }
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not reach the server at ${API_BASE}. ${detail}`);
-  } finally {
-    clearTimeout(timer);
   }
 
   const raw = await response.text();
@@ -94,6 +118,11 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
     throw new Error(
       raw.trim() || `Server at ${API_BASE} returned ${response.status} ${response.statusText}`,
     );
+  }
+
+  if (response.status === 401) {
+    await clearTokens();
+    throw new Error(payload.error?.message ?? 'Session expired. Please sign in again.');
   }
 
   if (!response.ok || !payload.success) {

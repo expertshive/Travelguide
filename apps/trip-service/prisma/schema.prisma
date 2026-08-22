@@ -17,3 +17,28 @@ model ServiceRecord {
 
   @@map("service_records")
 }
+
+/// A finished navigation session the traveler can reopen from Home.
+model Trip {
+  id                     String   @id @default(uuid())
+  userId                 String   @map("user_id")
+  originName             String   @map("origin_name")
+  originAddress          String   @db.Text @map("origin_address")
+  originLatitude         Float    @map("origin_latitude")
+  originLongitude        Float    @map("origin_longitude")
+  destinationName        String   @map("destination_name")
+  destinationAddress     String   @db.Text @map("destination_address")
+  destinationLatitude    Float    @map("destination_latitude")
+  destinationLongitude   Float    @map("destination_longitude")
+  stopsJson              String?  @db.Text @map("stops_json")
+  mode                   String   @default("driving")
+  distanceMeters         Int      @map("distance_meters")
+  durationSeconds        Int      @map("duration_seconds")
+  startedAt              DateTime @map("started_at")
+  endedAt                DateTime @map("ended_at")
+  completed              Boolean  @default(true)
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  @@index([userId, endedAt])
+  @@map("trips")
+}

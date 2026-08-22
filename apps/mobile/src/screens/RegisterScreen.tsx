@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import type { AuthScreenProps } from '../navigation/types';
-import { Button, Field, Txt, colors, spacing } from '../ui';
+import { Button, Field, Icon, Txt, colors, spacing } from '../ui';
 import { AuthLayout } from '../ui/AuthLayout';
 import { Banner } from '../ui/Banner';
 
@@ -16,6 +16,8 @@ export function RegisterScreen({ navigation }: Props) {
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpHint, setOtpHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,18 +105,46 @@ export function RegisterScreen({ navigation }: Props) {
           <Field
             label="Password"
             placeholder="Min. 8 characters"
-            secureTextEntry
+            secureTextEntry={!showPassword}
             autoComplete="new-password"
             value={password}
             onChangeText={setPassword}
+            right={
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <Icon.EyeOffIcon color={colors.textDim} size={20} />
+                ) : (
+                  <Icon.EyeIcon color={colors.textDim} size={20} />
+                )}
+              </Pressable>
+            }
           />
           <Field
             label="Confirm password"
             placeholder="Repeat your password"
-            secureTextEntry
+            secureTextEntry={!showConfirmPassword}
             autoComplete="new-password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
+            right={
+              <Pressable
+                onPress={() => setShowConfirmPassword((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? (
+                  <Icon.EyeOffIcon color={colors.textDim} size={20} />
+                ) : (
+                  <Icon.EyeIcon color={colors.textDim} size={20} />
+                )}
+              </Pressable>
+            }
           />
 
           <Button

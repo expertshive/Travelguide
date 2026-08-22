@@ -46,6 +46,8 @@ import {
   type SavedPlace,
   type TravelMode,
 } from '../lib/map';
+import { fetchHeritageAlongRoute, approachNarration, toPlace, type HeritageSite } from '../lib/heritage';
+import { heritageCommand } from '../lib/heritageIntent';
 import { destroyVoice } from '../lib/voice';
 import { speak, setAssistantVoice, stopSpeaking } from '../lib/tts';
 import {
@@ -56,6 +58,7 @@ import {
   type AssistantPrefs,
 } from '../lib/assistantPrefs';
 import { setTabBarHidden } from '../lib/tabBarVisibility';
+import { saveCompletedTrip, type SaveTripInput } from '../lib/trips';
 import type { TabScreenProps } from '../navigation/types';
 import { GOOGLE_MAPS_ENABLED, OSM_SATELLITE_TILES, OSM_STREET_TILES } from '../config';
 import type { AssistantAction, AssistantContext } from '../lib/assistant';
@@ -109,13 +112,20 @@ function cleanInstruction(text: string): string {
 const EDGE = { top: 160, right: 48, bottom: 280, left: 48 };
 const ARRIVE_METERS = 45;
 
+function downsampleLine(line: LatLng[], max = 400): LatLng[] {
+  if (line.length <= max) return line;
+  const step = Math.ceil(line.length / max);
+  const out: LatLng[] = [];
+  for (let i = 0; i < line.length; i += step) out.push(line[i]);
+  const last = line[line.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
 /** Android's default map provider is Google; without a key, overlay OSM tiles. */
 const USE_OSM_TILES = Platform.OS === 'android' && !GOOGLE_MAPS_ENABLED;
 
-/** Famous / tourist places the assistant announces on its own while traveling. */
-const FAMOUS_QUERIES = ['tourist attraction', 'landmark', 'museum', 'historical site'];
-const FAMOUS_LABEL = 'famous place';
-const SUGGEST_INTERVAL_MS = 18000;
+/** Historical sites along the driving line — not generic tourist attractions. */
 const DEFAULT_RADIUS_M = 2000;
 const RADIUS_OPTIONS = [
   [500, '500m'],
@@ -196,6 +206,10 @@ export function MapScreen({ route, navigation }: Props) {
   const [browseQuery, setBrowseQuery] = useState<string | null>(null);
   const [endSearching, setEndSearching] = useState(true);
   const [stepsOpen, setStepsOpen] = useState(false);
+  const [heritage, setHeritage] = useState<HeritageSite[]>([]);
+  const [heritageAlert, setHeritageAlert] = useState<HeritageSite | null>(null);
+  const [heritageMuted, setHeritageMuted] = useState(false);
+  const [heritageOpen, setHeritageOpen] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -208,10 +222,14 @@ export function MapScreen({ route, navigation }: Props) {
 
   const meRef = useRef<LatLng | null>(null);
   const radiusRef = useRef(DEFAULT_RADIUS_M);
-  const suggestedIds = useRef<Set<string>>(new Set());
-  const interestIdx = useRef(0);
+  const announcedHeritage = useRef<Set<string>>(new Set());
+  const lastHeritageGps = useRef<LatLng | null>(null);
+  const heritageMutedRef = useRef(false);
   const plannedKey = useRef<string | null>(null);
   const autoStarted = useRef(false);
+  const navigatingRef = useRef(false);
+  const tripDraft = useRef<SaveTripInput | null>(null);
+  const tripPersisted = useRef(false);
 
   const primary = routes[routeIndex];
   const origin = useMemo(() => {
@@ -222,6 +240,16 @@ export function MapScreen({ route, navigation }: Props) {
     }
     return originFrom(me, saved);
   }, [startPlace, route.params?.origin, me, saved]);
+
+  const heritageFocus = me ?? origin;
+  const heritageInRadius = useMemo(() => {
+    if (!heritageFocus) return [];
+    return heritage.filter(
+      (s) =>
+        s.routeDistanceMeters <= searchRadiusM &&
+        haversine(heritageFocus, s.center) <= searchRadiusM,
+    );
+  }, [heritage, heritageFocus, searchRadiusM]);
 
   useEffect(() => {
     meRef.current = me;
@@ -234,6 +262,10 @@ export function MapScreen({ route, navigation }: Props) {
   useEffect(() => {
     destRef.current = selected;
   }, [selected]);
+
+  useEffect(() => {
+    navigatingRef.current = navigating;
+  }, [navigating]);
 
   useFocusEffect(
     useCallback(() => {
@@ -446,39 +478,60 @@ export function MapScreen({ route, navigation }: Props) {
     if (text) void speak(text);
   }, [navigating, stepIndex, steps]);
 
-  // While driving, only announce famous places inside the chosen radius.
-  // Restaurants and rest areas wait until the traveler asks.
+  // Historical sites are loaded once per route+radius (cached on the server).
+  // GPS only geofences that list — never a Places API call per tick.
   useEffect(() => {
-    if (!navigating) return;
-    const timer = setInterval(async () => {
-      const here = meRef.current;
-      if (!here || suggestion) return;
-      const query = FAMOUS_QUERIES[interestIdx.current % FAMOUS_QUERIES.length];
-      interestIdx.current += 1;
-      try {
-        const found = await searchPlaces(query, here, 8);
-        const cap = radiusRef.current;
-        const near = found
-          .map((p) => ({ p, d: haversine(here, p.center) }))
-          .filter(({ p, d }) => d <= cap && !suggestedIds.current.has(p.id))
-          .sort((a, b) => a.d - b.d)[0];
-        if (near) {
-          suggestedIds.current.add(near.p.id);
-          setSuggestion({ place: near.p, category: FAMOUS_LABEL, meters: near.d });
-          void speak(
-            spokenCopy(prefs.language).nearby(
-              FAMOUS_LABEL,
-              near.p.name,
-              formatDistance(near.d),
-            ),
-          );
-        }
-      } catch {
-        /* ignore a failed lookup */
-      }
-    }, SUGGEST_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [navigating, suggestion, prefs.language]);
+    if (!primary?.geometry?.length || heritageMuted) {
+      if (heritageMuted) setHeritage([]);
+      return;
+    }
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      void fetchHeritageAlongRoute({
+        geometry: downsampleLine(primary.geometry),
+        radiusMeters: searchRadiusM,
+        origin: origin ?? undefined,
+      })
+        .then((sites) => {
+          if (!cancelled) setHeritage(sites.filter((s) => s.visitable));
+        })
+        .catch(() => {
+          if (!cancelled) setHeritage([]);
+        });
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [primary, searchRadiusM, origin, heritageMuted]);
+
+  useEffect(() => {
+    announcedHeritage.current = new Set();
+    setHeritageAlert(null);
+  }, [primary?.id, selected?.id]);
+
+  useEffect(() => {
+    if (!navigating || heritageMuted || heritageAlert || !me || !heritageInRadius.length) return;
+    if (lastHeritageGps.current && haversine(me, lastHeritageGps.current) < 28) return;
+    lastHeritageGps.current = me;
+    const cap = radiusRef.current;
+    const next = heritageInRadius
+      .filter((s) => !announcedHeritage.current.has(s.id))
+      .map((s) => ({ s, d: haversine(me, s.center) }))
+      .filter(({ d }) => d <= cap)
+      .sort((a, b) => a.d - b.d)[0];
+    if (!next) return;
+    announcedHeritage.current.add(next.s.id);
+    setHeritageAlert(next.s);
+    void speak(approachNarration(next.s, next.d, formatDistance));
+  }, [me, navigating, heritageInRadius, heritageAlert, heritageMuted]);
+
+  useEffect(() => {
+    if (!heritageAlert || !heritageFocus) return;
+    if (haversine(heritageFocus, heritageAlert.center) > searchRadiusM) {
+      setHeritageAlert(null);
+    }
+  }, [heritageAlert, heritageFocus, searchRadiusM]);
 
   async function acceptSuggestion() {
     if (!suggestion) return;
@@ -486,6 +539,40 @@ export function MapScreen({ route, navigation }: Props) {
     setSuggestion(null);
     void speak(spokenCopy(prefs.language).adding(place.name));
     await addStop(place);
+  }
+
+  async function applyHeritageCommand(
+    cmd: ReturnType<typeof heritageCommand>,
+    site: HeritageSite | null = heritageAlert,
+  ) {
+    if (!cmd) return;
+    if (cmd.type === 'mute') {
+      setHeritageMuted(true);
+      setHeritageAlert(null);
+      setHeritage([]);
+      void speak("Okay. I won't mention historical places on this trip.");
+      return;
+    }
+    if (!site) return;
+    if (cmd.type === 'skip') {
+      setHeritageAlert(null);
+      void speak('Skipping it.');
+      return;
+    }
+    if (cmd.type === 'more') {
+      const extra = site.storyLong || site.story;
+      void speak(extra);
+      return;
+    }
+    if (cmd.type === 'add') {
+      const minutes = cmd.minutes ?? site.visitMinutes.min;
+      setHeritageAlert(null);
+      const planned = await addStop(toPlace(site));
+      const eta = planned ? formatDuration(planned.durationSeconds) : '';
+      void speak(
+        `I've added a ${minutes} minute stop at ${site.name}. ${eta ? `Your next arrival is about ${eta}.` : ''}`,
+      );
+    }
   }
 
   // -- route option changes (explicit re-plan with the new value) ------------
@@ -506,13 +593,14 @@ export function MapScreen({ route, navigation }: Props) {
   async function addStop(place: Place) {
     if (stopPlaces.length >= MAX_STOPS) {
       setBanner(`You can add up to ${MAX_STOPS} stops.`);
-      return;
+      return null;
     }
     const next = [...stopPlaces, place];
     setStopPlaces(next);
     setQuery('');
     setResults([]);
-    if (selected) await planRoute(selected, { stops: next });
+    if (selected) return planRoute(selected, { stops: next });
+    return null;
   }
 
   function removeStop(index: number) {
@@ -633,8 +721,8 @@ export function MapScreen({ route, navigation }: Props) {
     startGuidance(planned);
   }
 
-  function startGuidance(route: Route) {
-    const list = route.legs[0]?.steps ?? [];
+  function startGuidance(planned: Route) {
+    const list = planned.legs[0]?.steps ?? [];
     stepsRef.current = list;
     stepIndexRef.current = 0;
     spokenStep.current = 0;
@@ -667,8 +755,37 @@ export function MapScreen({ route, navigation }: Props) {
       }
     });
 
+    const dest = destRef.current ?? selected;
+    if (dest && origin) {
+      tripPersisted.current = false;
+      tripDraft.current = {
+        originName: startPlace?.name ?? route.params?.origin?.name ?? 'Your location',
+        originAddress: startPlace?.address ?? route.params?.origin?.address ?? 'Current position',
+        originLatitude: origin.latitude,
+        originLongitude: origin.longitude,
+        destinationName: dest.name,
+        destinationAddress: dest.address,
+        destinationLatitude: dest.center.latitude,
+        destinationLongitude: dest.center.longitude,
+        stops: stopPlaces.map((s) => ({
+          name: s.name,
+          address: s.address,
+          latitude: s.center.latitude,
+          longitude: s.center.longitude,
+        })),
+        mode,
+        distanceMeters: planned.distanceMeters,
+        durationSeconds: planned.durationSeconds,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        completed: true,
+      };
+    } else {
+      tripDraft.current = null;
+    }
+
     const destName = destRef.current?.name ?? selected?.name ?? 'your destination';
-    const eta = formatDuration(route.durationSeconds);
+    const eta = formatDuration(planned.durationSeconds);
     const guide = prefs.name || 'your guide';
     const first = cleanInstruction(list[0]?.instruction ?? 'Follow the highlighted route.');
     const intro = spokenCopy(prefs.language).intro(guide, destName, eta, first);
@@ -685,6 +802,22 @@ export function MapScreen({ route, navigation }: Props) {
     void beginTrip();
   }, [route.params?.autoStart, primary, navigating, planning]);
 
+  async function persistCompletedTrip(completed: boolean) {
+    const draft = tripDraft.current;
+    if (!draft || tripPersisted.current) return;
+    tripPersisted.current = true;
+    try {
+      await saveCompletedTrip({
+        ...draft,
+        endedAt: new Date().toISOString(),
+        completed,
+      });
+      setBanner('Trip saved');
+    } catch {
+      tripPersisted.current = false;
+    }
+  }
+
   function stopNavigation() {
     if (navWatchId.current !== null) clearWatch(navWatchId.current);
     navWatchId.current = null;
@@ -693,6 +826,7 @@ export function MapScreen({ route, navigation }: Props) {
     setNavigating(false);
     setTabBarHidden(false);
     stopSpeaking();
+    void persistCompletedTrip(arrived.current);
   }
 
   useEffect(
@@ -700,6 +834,7 @@ export function MapScreen({ route, navigation }: Props) {
       setTabBarHidden(false);
       stopSpeaking();
       if (navWatchId.current !== null) clearWatch(navWatchId.current);
+      if (navigatingRef.current) void persistCompletedTrip(arrived.current);
     },
     [],
   );
@@ -768,13 +903,42 @@ export function MapScreen({ route, navigation }: Props) {
     distanceMeters: primary?.distanceMeters,
     durationSeconds: primary?.durationSeconds,
     assistant: { name: prefs.name, gender: prefs.gender, language: prefs.language },
+    pendingHeritage: heritageAlert
+      ? { id: heritageAlert.id, name: heritageAlert.name }
+      : undefined,
   };
+
+  async function applyVoiceDestination(query: string): Promise<{ name: string } | null> {
+    const q = query.trim();
+    if (!q) return null;
+    try {
+      const here = me ?? origin;
+      const found = await searchPlaces(q, here ?? undefined, 8);
+      const match = found[0];
+      if (!match) {
+        setBanner(`Couldn't find “${q}”.`);
+        return null;
+      }
+      await planRoute(match);
+      setAssistantOpen(false);
+      return { name: match.name };
+    } catch {
+      setBanner(`Couldn't find “${q}”.`);
+      return null;
+    }
+  }
 
   async function onAssistantAction(action: AssistantAction) {
     switch (action.type) {
       case 'search':
-        if (action.query) setQuery(action.query);
-        setAssistantOpen(false);
+      case 'set_destination':
+        if (action.query) {
+          const place = await applyVoiceDestination(action.query);
+          if (!place && action.type === 'search') {
+            setQuery(action.query);
+            setAssistantOpen(false);
+          }
+        }
         break;
       case 'add_stop':
         if (action.query) {
@@ -836,7 +1000,7 @@ export function MapScreen({ route, navigation }: Props) {
         <Txt variant="bodyStrong">{formatDistance(searchRadiusM)}</Txt>
       </View>
       <Txt variant="small" color={colors.textDim} style={{ marginBottom: spacing.sm }}>
-        Famous places inside this circle are announced while you travel.
+        Historical places inside this circle (on your route) are shown. Nothing outside the radius.
       </Txt>
       <View style={styles.radiusRow}>
         {RADIUS_OPTIONS.map(([meters, label]) => {
@@ -989,6 +1153,20 @@ export function MapScreen({ route, navigation }: Props) {
           );
         })}
 
+        {heritageInRadius.map((h) => (
+          <Marker
+            key={`h-${h.id}`}
+            coordinate={h.center}
+            title={h.name}
+            description={h.category}
+            onPress={() => setHeritageAlert(h)}
+          >
+            <View style={[styles.pin, { backgroundColor: colors.star }]}>
+              <Icon.StarIcon color={colors.onPrimary} size={14} />
+            </View>
+          </Marker>
+        ))}
+
         {stopPlaces.map((s, i) => (
           <Marker key={`stop-${s.id}-${i}`} coordinate={s.center} title={`Stop ${i + 1}`}>
             <View style={[styles.pin, { backgroundColor: colors.warning }]}>
@@ -1122,6 +1300,14 @@ export function MapScreen({ route, navigation }: Props) {
               </View>
               <Pressable hitSlop={8} style={styles.roundBtn} onPress={swapTripEnds}>
                 <Icon.SwapIcon color={colors.text} size={18} />
+              </Pressable>
+              <Pressable
+                hitSlop={8}
+                style={styles.roundBtn}
+                onPress={() => setAssistantOpen(true)}
+                accessibilityLabel="Talk to assistant"
+              >
+                <Icon.MicIcon color={colors.primary} size={20} />
               </Pressable>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeScroller}>
@@ -1282,6 +1468,19 @@ export function MapScreen({ route, navigation }: Props) {
           </Pressable>
         ) : null}
 
+        {!assistantOpen ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Talk to assistant"
+            style={[styles.assistantFab, { bottom: navigating ? fabBottom + 92 : fabBottom }]}
+            onPress={() => setAssistantOpen(true)}
+          >
+            <Gradient name="candy" style={styles.assistantFabInner}>
+              <Icon.MicIcon color={colors.onPrimary} size={24} />
+            </Gradient>
+          </Pressable>
+        ) : null}
+
         {offRoute ? (
           <View style={[styles.reroute, { bottom: chromeBottom + 56 }]}>
             <Txt variant="small" color={colors.onPrimary}>
@@ -1292,6 +1491,33 @@ export function MapScreen({ route, navigation }: Props) {
                 Reroute
               </Txt>
             </Pressable>
+          </View>
+        ) : null}
+
+        {heritageAlert && navigating ? (
+          <View style={[styles.suggestion, { bottom: chromeBottom + 56 }]}>
+            <View style={[styles.suggestIcon, { backgroundColor: colors.star }]}>
+              <Icon.StarIcon color={colors.onPrimary} size={18} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="bodyStrong" numberOfLines={1}>
+                {heritageAlert.name}
+              </Txt>
+              <Txt variant="small" color={colors.textDim} numberOfLines={2}>
+                {heritageAlert.category}
+                {me ? ` · ${formatDistance(haversine(me, heritageAlert.center))}` : ''}
+                {heritageAlert.openNow === false ? ' · Closed now' : ''}
+              </Txt>
+            </View>
+            <Pressable onPress={() => void applyHeritageCommand({ type: 'skip' })} hitSlop={8} style={styles.suggestNo}>
+              <Icon.CloseIcon color={colors.textDim} size={18} />
+            </Pressable>
+            <Button
+              title="Add"
+              size="md"
+              full={false}
+              onPress={() => void applyHeritageCommand({ type: 'add', minutes: heritageAlert.visitMinutes.min })}
+            />
           </View>
         ) : null}
 
@@ -1336,7 +1562,17 @@ export function MapScreen({ route, navigation }: Props) {
                   Voice guidance on
                 </Txt>
               </View>
-              <Button title="End" variant="danger" full={false} onPress={stopNavigation} style={{ minWidth: 110 }} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Talk to assistant"
+                onPress={() => setAssistantOpen(true)}
+                style={styles.navTalk}
+              >
+                <Gradient name="candy" style={styles.navTalkInner}>
+                  <Icon.MicIcon color={colors.onPrimary} size={22} />
+                </Gradient>
+              </Pressable>
+              <Button title="End" variant="danger" full={false} onPress={stopNavigation} style={{ minWidth: 96 }} />
             </View>
           </View>
         ) : null}
@@ -1382,6 +1618,47 @@ export function MapScreen({ route, navigation }: Props) {
               </ScrollView>
             ) : null}
             {radiusPicker}
+            {!heritageMuted && heritageInRadius.length ? (
+              <View style={styles.heritageBlock}>
+                <Pressable onPress={() => setHeritageOpen((v) => !v)} style={styles.heritageHead}>
+                  <Txt variant="caption" color={colors.textFaint}>
+                    HISTORICAL PLACES IN RADIUS
+                  </Txt>
+                  <Txt variant="small" color={colors.primary}>
+                    {heritageOpen ? 'Hide' : `${heritageInRadius.length}`}
+                  </Txt>
+                </Pressable>
+                {heritageOpen ? (
+                  <ScrollView style={{ maxHeight: 168 }} showsVerticalScrollIndicator>
+                    {heritageInRadius.slice(0, 8).map((h) => (
+                      <View key={h.id} style={styles.heritageRow}>
+                        <View style={{ flex: 1 }}>
+                          <Txt variant="bodyStrong" numberOfLines={1}>
+                            {h.name}
+                          </Txt>
+                          <Txt variant="caption" color={colors.textDim} numberOfLines={2}>
+                            {formatDistance(haversine(heritageFocus ?? h.center, h.center))} away
+                            {` · ${formatDistance(h.routeDistanceMeters)} off route`}
+                            {h.ageLabel ? ` · ${h.ageLabel}` : ''}
+                            {h.openNow === false ? ' · Closed now' : h.openNow ? ' · Open' : ''}
+                            {` · ${h.visitMinutes.min}–${h.visitMinutes.max} min`}
+                          </Txt>
+                          <Txt variant="small" color={colors.textDim} numberOfLines={2}>
+                            {h.whyImportant}
+                          </Txt>
+                        </View>
+                        <Button
+                          title="Add stop"
+                          size="md"
+                          full={false}
+                          onPress={() => void applyHeritageCommand({ type: 'add', minutes: h.visitMinutes.min }, h)}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : null}
+              </View>
+            ) : null}
             <View style={styles.sheetActions}>
               <Pressable style={styles.ghostBtn} onPress={() => setStepsOpen((v) => !v)}>
                 <Icon.ListIcon color={colors.text} size={18} />
@@ -1439,6 +1716,8 @@ export function MapScreen({ route, navigation }: Props) {
           persona={{ name: prefs.name, language: prefs.language }}
           onClose={() => setAssistantOpen(false)}
           onAction={(a) => void onAssistantAction(a)}
+          onSetDestination={applyVoiceDestination}
+          onHeritageCommand={(cmd) => void applyHeritageCommand(cmd)}
           onSuggestStop={(item) => setSuggestion(item)}
         />
       ) : null}
@@ -1815,6 +2094,8 @@ const styles = StyleSheet.create({
 
   navControls: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   navStats: { flex: 1 },
+  navTalk: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden' },
+  navTalkInner: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
 
   suggestion: {
     position: 'absolute',
@@ -1836,6 +2117,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   suggestNo: { padding: spacing.xs },
+  heritageBlock: { marginTop: spacing.md },
+  heritageHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  heritageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
 
   searchBar: {
     flexDirection: 'row',

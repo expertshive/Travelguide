@@ -1,7 +1,7 @@
 import { authorizedRequest } from './auth';
 
 export type AssistantAction = {
-  type: 'none' | 'search' | 'add_stop' | 'remove_stop' | 'set_route_style' | 'start_navigation';
+  type: 'none' | 'search' | 'set_destination' | 'add_stop' | 'remove_stop' | 'set_route_style' | 'start_navigation';
   query?: string;
   routeStyle?: string;
   requiresConfirmation?: boolean;
@@ -23,6 +23,8 @@ export type AssistantContext = {
   durationSeconds?: number;
   /** How far from the traveler the agent may discuss / suggest places. */
   radiusMeters?: number;
+  /** Historical site currently being offered as a stop. */
+  pendingHeritage?: { id: string; name: string };
   /** The assistant persona chosen by the user (name / gender / language). */
   assistant?: { name?: string; gender?: string; language?: string };
 };

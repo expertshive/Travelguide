@@ -64,6 +64,28 @@ export function CameraIcon(props: IconProps) {
   );
 }
 
+export function EyeIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" strokeLinejoin="round" />
+      <Circle cx="12" cy="12" r="3" />
+    </IconFrame>
+  );
+}
+
+export function EyeOffIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <Path d="M3 3l18 18" strokeLinecap="round" />
+      <Path
+        d="M10.6 10.6A3 3 0 0 0 13.4 13.4M9.9 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 3.8M6.1 6.1A16.7 16.7 0 0 0 2 12s3.6 7 10 7c1.5 0 2.9-.3 4.1-.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </IconFrame>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <IconFrame {...props}>

@@ -9,6 +9,7 @@ export type AssistantAction = {
   type:
     | 'none'
     | 'search'
+    | 'set_destination'
     | 'add_stop'
     | 'remove_stop'
     | 'set_route_style'
@@ -233,8 +234,9 @@ export class AssistantService {
       'Default while traveling: only mention famous or tourist places (landmarks, attractions, museums, historic sites) inside the radius. Do not volunteer restaurants, rest areas, coffee, fuel, mosques, or other amenities.',
       'If they sound hungry or tired of driving — even without saying "restaurant" or "rest area" — offer the nearest one in plain speech and use action "add_stop" with query "restaurant" or "rest area". Mention only the nearest one.',
       'When they ask what a famous place is like, or about history, answer briefly and warmly with action "none".',
-      'IMPORTANT: never say a route change has happened. Propose it like a friend — "Want me to add that?" — and set the action; the app asks them to confirm before the route actually changes.',
-      'Pick exactly one action: "search" (query = what to show on the map), "add_stop" (query = the place type/name to add as a stop and reroute), "remove_stop", "set_route_style" (routeStyle = fastest|shortest|scenic|historical|adventure|food|family|religious|budget), "start_navigation", or "none" for pure conversation.',
+      'IMPORTANT: setting a new destination happens in the app right away. For adding or removing stops, never say the route has already changed — propose it and wait for confirmation.',
+      'If they name a place they want to go — “take me to …”, “let’s go to …”, a city, mall, airport, or address — use action "set_destination" with query set to that place. The app will search the map and set it as the trip destination. Do not use search for that.',
+      'Pick exactly one action: "search" (query = what to browse on the map without changing destination), "set_destination" (query = the place to go), "add_stop" (query = the place type/name to add as a stop and reroute), "remove_stop", "set_route_style" (routeStyle = fastest|shortest|scenic|historical|adventure|food|family|religious|budget), "start_navigation", or "none" for pure conversation.',
       'The "reply" field is the voice prompt. End route suggestions with a short spoken yes-or-no question in that language.',
     ].join(' ');
 
@@ -285,7 +287,7 @@ export class AssistantService {
           messages: [
             {
               role: 'system',
-              content: `${prompt.system} Reply with a JSON object only: {"reply":"...","action":{"type":"none|search|add_stop|remove_stop|set_route_style|start_navigation","query":"...","routeStyle":"..."}}. Omit query and routeStyle when unused.`,
+              content: `${prompt.system} Reply with a JSON object only: {"reply":"...","action":{"type":"none|search|set_destination|add_stop|remove_stop|set_route_style|start_navigation","query":"...","routeStyle":"..."}}. Omit query and routeStyle when unused.`,
             },
             { role: 'user', content: prompt.userText },
           ],
@@ -359,6 +361,7 @@ export class AssistantService {
                   enum: [
                     'none',
                     'search',
+                    'set_destination',
                     'add_stop',
                     'remove_stop',
                     'set_route_style',

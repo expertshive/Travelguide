@@ -83,3 +83,63 @@ export function polylineLengthMeters(points: LatLng[]): number {
   }
   return total;
 }
+
+/** Points spaced roughly `intervalMeters` apart along the polyline. */
+export function sampleAlongPolyline(points: LatLng[], intervalMeters: number): LatLng[] {
+  if (points.length === 0) return [];
+  const gap = Math.max(200, intervalMeters);
+  const out: LatLng[] = [points[0]];
+  let accrued = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    accrued += haversineMeters(points[i], points[i + 1]);
+    if (accrued >= gap) {
+      out.push(points[i + 1]);
+      accrued = 0;
+    }
+  }
+  const last = points[points.length - 1];
+  if (haversineMeters(out[out.length - 1], last) > 40) out.push(last);
+  return out;
+}
+
+/** Shortest distance from a point to any segment of the polyline. */
+export function minDistanceToPolyline(
+  point: LatLng,
+  line: LatLng[],
+): { meters: number; index: number } {
+  if (line.length === 0) return { meters: Number.POSITIVE_INFINITY, index: 0 };
+  if (line.length === 1) return { meters: haversineMeters(point, line[0]), index: 0 };
+  let bestIndex = 0;
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < line.length - 1; i += 1) {
+    const meters = distanceToSegmentMeters(point, line[i], line[i + 1]);
+    if (meters < best) {
+      best = meters;
+      bestIndex = i;
+    }
+  }
+  return { meters: best, index: bestIndex };
+}
+
+/** Initial bearing in degrees clockwise from north. */
+export function bearingDegrees(from: LatLng, to: LatLng): number {
+  const φ1 = toRadians(from.latitude);
+  const φ2 = toRadians(to.latitude);
+  const Δλ = toRadians(to.longitude - from.longitude);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180) / Math.PI;
+}
+
+/** Which side of the heading `from→ahead` the place sits on. */
+export function sideOfHeading(
+  from: LatLng,
+  ahead: LatLng,
+  place: LatLng,
+): 'left' | 'right' | 'along' {
+  const heading = bearingDegrees(from, ahead);
+  const toPlace = bearingDegrees(from, place);
+  let delta = ((toPlace - heading + 540) % 360) - 180;
+  if (Math.abs(delta) < 12) return 'along';
+  return delta > 0 ? 'right' : 'left';
+}
